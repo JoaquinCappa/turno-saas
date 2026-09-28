@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// ARQUITECTURA MULTI-TENANT
+// Todas las entidades principales deben pertenecer a un Business.
+// -----------------------------------------------------------------------------
+
+model Business {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  // Services, Professionals, Customers, Bookings irán aquí a futuro.
+}
+
+model User {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String?
+  email      String   @unique
+  password   String
+  role       Role     @default(STAFF)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business   Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  STAFF
+}

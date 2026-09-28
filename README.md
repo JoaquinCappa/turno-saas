@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Turnos SaaS
 
-## Getting Started
+Sistema de gestión de reservas y turnos diseñado para negocios de servicios (barberías, peluquerías, estética, fitness, etc.).
 
-First, run the development server:
+## Objetivo del Proyecto
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Construir un SaaS multi-tenant que permita a múltiples negocios gestionar su calendario de turnos de manera completamente aislada. 
+A futuro, este sistema será la base para un marketplace donde los clientes finales podrán buscar y reservar turnos, pero el enfoque inicial está 100% en el núcleo administrativo y operativo de cada negocio.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Stack Tecnológico
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Framework**: Next.js (App Router)
+- **Lenguaje**: TypeScript
+- **Estilos**: Tailwind CSS
+- **Base de Datos**: PostgreSQL
+- **ORM**: Prisma
+- **Autenticación**: NextAuth.js / Auth.js (con bcryptjs para contraseñas)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Arquitectura y Seguridad (Multi-Tenant)
 
-## Learn More
+La arquitectura de este SaaS requiere un fuerte aislamiento de datos por negocio. 
 
-To learn more about Next.js, take a look at the following resources:
+- La entidad raíz del sistema es `Business`.
+- Todas las demás entidades (Usuarios, Profesionales, Clientes, Servicios, Reservas, etc.) pertenecen a un `Business`.
+- **Seguridad y Autorización**: Nunca se asume que un usuario tiene acceso global a los recursos solo por estar autenticado. Cualquier operación de lectura, escritura o modificación deberá validar siempre el patrón: `Usuario -> Business -> Recurso`. No se implementará lógica de negocio para un recurso sin antes verificar la pertenencia al `Business` correspondiente.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estructura Inicial del Proyecto
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `src/app`: Rutas de la aplicación (App Router).
+- `src/components`: Componentes reutilizables de UI.
+- `src/lib`: Utilidades, configuración compartida (ej. cliente Prisma).
+- `src/server`: Acciones de servidor (Server Actions) y lógica de backend.
+- `src/types`: Definiciones de tipos de TypeScript adicionales.
+- `prisma/`: Esquema de la base de datos y migraciones.
 
-## Deploy on Vercel
+## Desarrollo y Ejecución
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Instalar dependencias:
+   ```bash
+   npm install
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. Configurar variables de entorno:
+   Copiar `.env.example` a `.env` y configurar la URL de PostgreSQL (`DATABASE_URL`) y la clave secreta de NextAuth (`AUTH_SECRET`).
+
+3. Sincronizar Prisma (una vez que la base de datos PostgreSQL esté corriendo):
+   ```bash
+   npx prisma db push
+   # o
+   npx prisma migrate dev
+   ```
+
+4. Iniciar servidor de desarrollo:
+   ```bash
+   npm run dev
+   ```
