@@ -26,7 +26,7 @@ export default function RegisterPage() {
       setLoading(false);
       // Redirigir al login después de mostrar el mensaje de éxito
       setTimeout(() => {
-        router.push('/api/auth/signin');
+        router.push('/login');
       }, 2000);
     }
   };
