@@ -62,3 +62,39 @@ export function calculateEndAt(startAt: Date, durationMinutes: number): Date {
 export function formatBusinessDate(date: Date, timeZone: string, fmt: string = 'dd/MM/yyyy HH:mm') {
   return format(toZonedTime(date, timeZone), fmt, { timeZone });
 }
+
+/**
+ * Obtiene los límites de un día específico en el timezone del negocio.
+ */
+export function getBusinessDayBounds(localDate: string, timeZone: string) {
+  const startAt = fromZonedTime(`${localDate}T00:00:00`, timeZone);
+  const endAt = fromZonedTime(`${localDate}T23:59:59.999`, timeZone);
+  return { startAt, endAt };
+}
+
+/**
+ * Obtiene los límites de la semana (Lunes a Domingo) en base a un día local en el timezone del negocio.
+ */
+export function getBusinessWeekBounds(localDate: string, timeZone: string) {
+  // Convertimos a objeto de fecha zoned (la medianoche de ese día)
+  const zonedTarget = toZonedTime(fromZonedTime(`${localDate}T00:00:00`, timeZone), timeZone);
+  
+  // getDay(): 0 = Sunday, 1 = Monday, etc.
+  const dayOfWeek = zonedTarget.getDay(); 
+  // Convertimos a Lunes=0, Domingo=6
+  const jsToIso = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  
+  const monday = new Date(zonedTarget);
+  monday.setDate(monday.getDate() - jsToIso);
+  
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+  
+  // Format YYYY-MM-DD
+  const formatIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  
+  const startAt = fromZonedTime(`${formatIso(monday)}T00:00:00`, timeZone);
+  const endAt = fromZonedTime(`${formatIso(sunday)}T23:59:59.999`, timeZone);
+  
+  return { startAt, endAt };
+}
