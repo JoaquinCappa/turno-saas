@@ -17,27 +17,17 @@ function canTransition(current: BookingStatus, next: BookingStatus): boolean {
   return false;
 }
 
-export async function createBooking(data: {
-  customerId: string;
-  serviceId: string;
-  professionalId: string;
-  localDate: string; // "YYYY-MM-DD"
-  localTime: string; // "HH:mm"
-  notes?: string;
-}) {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.businessId) {
-    return { success: false, error: 'No autorizado' };
+export async function executeBooking(
+  businessId: string,
+  data: {
+    customerId: string;
+    serviceId: string;
+    professionalId: string;
+    localDate: string;
+    localTime: string;
+    notes?: string;
   }
-
-  const businessId = session.user.businessId;
-
-  // Basic validations
-  if (!data.customerId || !data.serviceId || !data.professionalId || !data.localDate || !data.localTime) {
-    return { success: false, error: 'Faltan datos obligatorios' };
-  }
-
+) {
   try {
     // 1. Obtener entidades y validar pertenencia y estado
     const business = await prisma.business.findUnique({
@@ -145,12 +135,39 @@ export async function createBooking(data: {
       });
     });
 
-    revalidatePath('/dashboard/turnos');
     return { success: true, bookingId: booking.id };
   } catch (error) {
     console.error('Error creating booking:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Error al procesar el turno' };
   }
+}
+
+export async function createBooking(data: {
+  customerId: string;
+  serviceId: string;
+  professionalId: string;
+  localDate: string; // "YYYY-MM-DD"
+  localTime: string; // "HH:mm"
+  notes?: string;
+}) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.businessId) {
+    return { success: false, error: 'No autorizado' };
+  }
+
+  const businessId = session.user.businessId;
+
+  // Basic validations
+  if (!data.customerId || !data.serviceId || !data.professionalId || !data.localDate || !data.localTime) {
+    return { success: false, error: 'Faltan datos obligatorios' };
+  }
+
+  const res = await executeBooking(businessId, data);
+  if (res.success) {
+    revalidatePath('/dashboard/turnos');
+  }
+  return res;
 }
 
 export async function cancelBooking(id: string) {
