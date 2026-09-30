@@ -5,6 +5,17 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createBusinessDate, getBusinessDayAndMinute, calculateEndAt } from '@/lib/date-utils';
+import { BookingStatus } from '@prisma/client';
+
+function canTransition(current: BookingStatus, next: BookingStatus): boolean {
+  if (current === 'PENDING') {
+    return ['CONFIRMED', 'CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(next);
+  }
+  if (current === 'CONFIRMED') {
+    return ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(next);
+  }
+  return false;
+}
 
 export async function createBooking(data: {
   customerId: string;
@@ -151,9 +162,13 @@ export async function cancelBooking(id: string) {
   }
 
   try {
-    const booking = await prisma.booking.findUnique({ where: { id }, select: { businessId: true } });
+    const booking = await prisma.booking.findUnique({ where: { id }, select: { businessId: true, status: true } });
     if (!booking || booking.businessId !== session.user.businessId) {
       return { success: false, error: 'Turno no encontrado' };
+    }
+
+    if (!canTransition(booking.status, 'CANCELLED')) {
+      return { success: false, error: 'El turno no puede cambiar a este estado desde su estado actual.' };
     }
 
     await prisma.booking.update({
@@ -178,9 +193,13 @@ export async function completeBooking(id: string) {
   }
 
   try {
-    const booking = await prisma.booking.findUnique({ where: { id }, select: { businessId: true } });
+    const booking = await prisma.booking.findUnique({ where: { id }, select: { businessId: true, status: true } });
     if (!booking || booking.businessId !== session.user.businessId) {
       return { success: false, error: 'Turno no encontrado' };
+    }
+
+    if (!canTransition(booking.status, 'COMPLETED')) {
+      return { success: false, error: 'El turno no puede cambiar a este estado desde su estado actual.' };
     }
 
     await prisma.booking.update({
@@ -195,3 +214,66 @@ export async function completeBooking(id: string) {
     return { success: false, error: 'Error al completar' };
   }
 }
+
+export async function confirmBooking(id: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.businessId) return { success: false, error: 'No autorizado' };
+
+  if (session.user.role === 'STAFF') {
+    return { success: false, error: 'No tenés permisos para confirmar turnos' };
+  }
+
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id }, select: { businessId: true, status: true } });
+    if (!booking || booking.businessId !== session.user.businessId) {
+      return { success: false, error: 'Turno no encontrado' };
+    }
+
+    if (!canTransition(booking.status, 'CONFIRMED')) {
+      return { success: false, error: 'El turno no puede cambiar a este estado desde su estado actual.' };
+    }
+
+    await prisma.booking.update({
+      where: { id },
+      data: { status: 'CONFIRMED' }
+    });
+
+    revalidatePath('/dashboard/turnos');
+    return { success: true };
+  } catch (error) {
+    console.error('Error confirming booking:', error);
+    return { success: false, error: 'Error al confirmar' };
+  }
+}
+
+export async function noShowBooking(id: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.businessId) return { success: false, error: 'No autorizado' };
+
+  if (session.user.role === 'STAFF') {
+    return { success: false, error: 'No tenés permisos para marcar ausencias' };
+  }
+
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id }, select: { businessId: true, status: true } });
+    if (!booking || booking.businessId !== session.user.businessId) {
+      return { success: false, error: 'Turno no encontrado' };
+    }
+
+    if (!canTransition(booking.status, 'NO_SHOW')) {
+      return { success: false, error: 'El turno no puede cambiar a este estado desde su estado actual.' };
+    }
+
+    await prisma.booking.update({
+      where: { id },
+      data: { status: 'NO_SHOW' }
+    });
+
+    revalidatePath('/dashboard/turnos');
+    return { success: true };
+  } catch (error) {
+    console.error('Error marking no show:', error);
+    return { success: false, error: 'Error al procesar' };
+  }
+}
+

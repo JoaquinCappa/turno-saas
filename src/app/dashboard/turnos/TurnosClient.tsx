@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Modal from '@/components/dashboard/Modal';
 import StatusBadge from '@/components/dashboard/StatusBadge';
-import WhatsAppAction from '@/components/dashboard/WhatsAppAction';
-import { createBooking, cancelBooking, completeBooking } from '@/app/actions/bookings';
+import { createBooking, cancelBooking, completeBooking, confirmBooking, noShowBooking } from '@/app/actions/bookings';
 import { formatBusinessDate } from '@/lib/date-utils';
 
 type BookingItem = {
@@ -13,7 +13,10 @@ type BookingItem = {
   endAt: Date;
   status: string;
   serviceName: string;
-  customer: { name: string; phone: string | null };
+  serviceDuration: number;
+  servicePrice: number;
+  notes: string | null;
+  customer: { name: string; phone: string | null; email: string | null };
   professional: { name: string };
 };
 
@@ -22,59 +25,77 @@ export default function TurnosClient({
   customers,
   services,
   professionals,
-  businessName,
   businessTimezone,
-  userRole
+  currentPage,
+  totalItems,
+  pageSize,
+  filters
 }: {
   initialBookings: (Omit<BookingItem, 'startAt' | 'endAt'> & { startAt: string | Date; endAt: string | Date })[];
   customers: { id: string; name: string; phone: string | null }[];
   services: { id: string; name: string; duration: number; price: number }[];
   professionals: { id: string; name: string }[];
-  businessName: string;
   businessTimezone: string;
-  userRole: string;
+  currentPage: number;
+  totalItems: number;
+  pageSize: number;
+  filters: { status: string; prof: string; service: string; date: string; q: string };
 }) {
-  const [filter, setFilter] = useState('Todos');
-  const [search, setSearch] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const router = useRouter();
 
-  // Form State
+  // Create Form State
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [customerId, setCustomerId] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [professionalId, setProfessionalId] = useState('');
   const [localDate, setLocalDate] = useState('');
   const [localTime, setLocalTime] = useState('');
   const [notes, setNotes] = useState('');
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
 
-  // Actions
-  const [actionModal, setActionModal] = useState<{ isOpen: boolean, id: string, type: 'cancel' | 'complete' } | null>(null);
+  // Local Filter State (for controlled inputs before pushing to URL)
+  const [localFilters, setLocalFilters] = useState(filters);
+  const hasActiveFilters = filters.status || filters.prof || filters.service || filters.date || filters.q;
+
+  // Actions state
   const [isActioning, setIsActioning] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
 
-  const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
-
-  const bookings: BookingItem[] = initialBookings.map((b) => ({
+  const bookings = initialBookings.map(b => ({
     ...b,
     startAt: new Date(b.startAt),
     endAt: new Date(b.endAt),
-  } as BookingItem));
+  }));
 
-  const filtered = bookings.filter(b => {
-    const statusMatch = filter === 'Todos' || 
-                        (filter === 'Confirmado' && b.status === 'CONFIRMED') ||
-                        (filter === 'Pendiente' && b.status === 'PENDING') ||
-                        (filter === 'Cancelado' && b.status === 'CANCELLED');
+  const pushFilters = (newFilters: typeof localFilters, page = 1) => {
+    const params = new URLSearchParams();
+    if (newFilters.status) params.set('status', newFilters.status);
+    if (newFilters.prof) params.set('prof', newFilters.prof);
+    if (newFilters.service) params.set('service', newFilters.service);
+    if (newFilters.date) params.set('date', newFilters.date);
+    if (newFilters.q) params.set('q', newFilters.q);
+    if (page > 1) params.set('page', page.toString());
     
-    const searchMatch = b.customer.name.toLowerCase().includes(search.toLowerCase());
-    return statusMatch && searchMatch;
-  });
+    router.push(`?${params.toString()}`);
+  };
 
-  const handleSave = async () => {
-    setError('');
+  const handleFilterChange = (key: keyof typeof localFilters, value: string) => {
+    const next = { ...localFilters, [key]: value };
+    setLocalFilters(next);
+    pushFilters(next, 1);
+  };
+
+  const handleClearFilters = () => {
+    const next = { status: '', prof: '', service: '', date: '', q: '' };
+    setLocalFilters(next);
+    pushFilters(next, 1);
+  };
+
+  const handleSaveCreate = async () => {
+    setFormError('');
     if (!customerId || !serviceId || !professionalId || !localDate || !localTime) {
-      return setError('Por favor completá todos los campos obligatorios');
+      return setFormError('Por favor completá todos los campos obligatorios');
     }
 
     setIsSubmitting(true);
@@ -89,88 +110,87 @@ export default function TurnosClient({
     setIsSubmitting(false);
 
     if (res.success) {
-      setIsModalOpen(false);
-      // Reset form
-      setCustomerId('');
-      setServiceId('');
-      setProfessionalId('');
-      setLocalDate('');
-      setLocalTime('');
-      setNotes('');
+      setIsCreateOpen(false);
+      setCustomerId(''); setServiceId(''); setProfessionalId(''); setLocalDate(''); setLocalTime(''); setNotes('');
     } else {
-      setError(res.error || 'Error al crear turno');
+      setFormError(res.error || 'Error al guardar');
     }
   };
 
-  const handleAction = async () => {
-    if (!actionModal) return;
+  const executeAction = async (action: 'confirm' | 'complete' | 'cancel' | 'noshow', id: string) => {
     setIsActioning(true);
-    
     let res;
-    if (actionModal.type === 'cancel') {
-      res = await cancelBooking(actionModal.id);
-    } else {
-      res = await completeBooking(actionModal.id);
+    switch (action) {
+      case 'confirm': res = await confirmBooking(id); break;
+      case 'complete': res = await completeBooking(id); break;
+      case 'cancel': res = await cancelBooking(id); break;
+      case 'noshow': res = await noShowBooking(id); break;
     }
-    
     setIsActioning(false);
-    
     if (res.success) {
-      setActionModal(null);
+      setSelectedBooking(null); // Close modal if open
     } else {
       alert(res.error || 'Error al procesar la acción');
     }
   };
 
-  const mapStatus = (status: string) => {
-    if (status === 'CONFIRMED') return 'Confirmado';
-    if (status === 'PENDING') return 'Pendiente';
-    if (status === 'CANCELLED') return 'Cancelado';
-    if (status === 'COMPLETED') return 'Completado';
-    if (status === 'NO_SHOW') return 'Ausente';
-    return status;
-  };
-
-  const selectedService = services.find(s => s.id === serviceId);
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   return (
     <div className="space-y-6">
-      
-      {/* TOOLBAR */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex flex-wrap items-center gap-2 bg-[#111113] border border-gray-800 rounded-lg p-1">
-          {['Todos', 'Confirmado', 'Pendiente', 'Cancelado'].map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
-            >
-              {f === 'Confirmado' ? 'Confirmados' : f === 'Pendiente' ? 'Pendientes' : f === 'Cancelado' ? 'Cancelados' : 'Todos'}
-            </button>
-          ))}
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <input 
-            type="text" 
-            placeholder="Buscar por cliente..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:w-64 bg-[#111113] border border-gray-800 text-white text-sm rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500 transition-colors"
-          />
-          {isAdmin && (
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="whitespace-nowrap bg-white text-black px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-200 transition-colors"
-            >
-              + Nuevo turno
+
+      {/* FILTER BAR */}
+      <div className="bg-[#111113] border border-gray-800 rounded-xl p-4 space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-white font-semibold">Filtros</h2>
+          {hasActiveFilters && (
+            <button onClick={handleClearFilters} className="text-sm text-gray-400 hover:text-white transition-colors">
+              Limpiar filtros
             </button>
           )}
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <input
+            type="text"
+            placeholder="Buscar cliente..."
+            value={localFilters.q}
+            onChange={e => setLocalFilters({ ...localFilters, q: e.target.value })}
+            onKeyDown={e => e.key === 'Enter' && pushFilters(localFilters, 1)}
+            className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500"
+          />
+          <input
+            type="date"
+            value={localFilters.date}
+            onChange={e => handleFilterChange('date', e.target.value)}
+            className="w-full bg-[#1A1A1C] border border-gray-800 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500"
+          />
+          <select value={localFilters.status} onChange={e => handleFilterChange('status', e.target.value)} className="w-full bg-[#1A1A1C] border border-gray-800 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500">
+            <option value="">Todos los estados</option>
+            <option value="PENDING">Pendiente</option>
+            <option value="CONFIRMED">Confirmado</option>
+            <option value="COMPLETED">Completado</option>
+            <option value="CANCELLED">Cancelado</option>
+            <option value="NO_SHOW">No asistió</option>
+          </select>
+          <select value={localFilters.prof} onChange={e => handleFilterChange('prof', e.target.value)} className="w-full bg-[#1A1A1C] border border-gray-800 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500">
+            <option value="">Profesionales (Todos)</option>
+            {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select value={localFilters.service} onChange={e => handleFilterChange('service', e.target.value)} className="w-full bg-[#1A1A1C] border border-gray-800 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500">
+            <option value="">Servicios (Todos)</option>
+            {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button onClick={() => setIsCreateOpen(true)} className="bg-white text-black px-4 py-2 rounded-lg font-semibold hover:bg-gray-200 transition-colors">
+          + Nuevo turno
+        </button>
       </div>
 
       {/* TABLE */}
-      <div className="bg-[#111113] border border-gray-800 rounded-2xl overflow-hidden">
+      <div className="bg-[#111113] border border-gray-800 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-[#1A1A1C] border-b border-gray-800 text-gray-400">
@@ -179,196 +199,218 @@ export default function TurnosClient({
                 <th className="px-6 py-4 font-semibold">Cliente</th>
                 <th className="px-6 py-4 font-semibold">Servicio</th>
                 <th className="px-6 py-4 font-semibold">Profesional</th>
-                <th className="px-6 py-4 font-semibold">Estado</th>
-                {isAdmin && <th className="px-6 py-4 font-semibold text-right">Acciones</th>}
+                <th className="px-6 py-4 font-semibold text-right">Duración/Precio</th>
+                <th className="px-6 py-4 font-semibold text-right">Estado</th>
+                <th className="px-6 py-4 font-semibold text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {filtered.length === 0 ? (
+              {bookings.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    No se encontraron turnos.
+                    No se encontraron turnos que coincidan con los filtros.
                   </td>
                 </tr>
               ) : (
-                filtered.map(t => {
-                  const dateStr = formatBusinessDate(t.startAt, businessTimezone, 'dd/MM/yyyy');
-                  const timeStr = formatBusinessDate(t.startAt, businessTimezone, 'HH:mm');
-                  const isCancelable = t.status === 'CONFIRMED' || t.status === 'PENDING';
-                  const isCompletable = t.status === 'CONFIRMED' || t.status === 'PENDING';
-
+                bookings.map((b) => {
+                  const dateStr = formatBusinessDate(b.startAt, businessTimezone, 'dd/MM/yyyy');
+                  const timeStr = formatBusinessDate(b.startAt, businessTimezone, 'HH:mm');
+                  const isPending = b.status === 'PENDING';
+                  const isConfirmed = b.status === 'CONFIRMED';
+                  
                   return (
-                  <tr key={t.id} className="hover:bg-[#1A1A1C] transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-white font-mono font-bold">{timeStr}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{dateStr}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-gray-200 font-medium">{t.customer.name}</div>
-                      {t.customer.phone && <div className="text-xs text-gray-500 font-mono mt-0.5">{t.customer.phone}</div>}
-                    </td>
-                    <td className="px-6 py-4 text-gray-400">{t.serviceName}</td>
-                    <td className="px-6 py-4 text-gray-400">{t.professional.name}</td>
-                    <td className="px-6 py-4"><StatusBadge status={mapStatus(t.status)} /></td>
-                    {isAdmin && (
+                    <tr key={b.id} className="hover:bg-[#1A1A1C] transition-colors cursor-pointer" onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('button')) return;
+                      setSelectedBooking(b);
+                    }}>
+                      <td className="px-6 py-4 text-white font-mono">{dateStr} {timeStr}</td>
+                      <td className="px-6 py-4 text-gray-300 font-medium">{b.customer.name}</td>
+                      <td className="px-6 py-4 text-gray-400">{b.serviceName}</td>
+                      <td className="px-6 py-4 text-gray-400">{b.professional.name}</td>
+                      <td className="px-6 py-4 text-gray-400 text-right">{b.serviceDuration}m / ${b.servicePrice}</td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-4 text-gray-400 text-sm">
-                          {t.customer.phone && (
-                            <WhatsAppAction 
-                              clientName={t.customer.name} 
-                              clientPhone={t.customer.phone} 
-                              businessName={businessName}
-                              turnoInfo={{ time: `${dateStr} a las ${timeStr}`, service: t.serviceName }}
-                              variant="text"
-                            />
-                          )}
-                          
-                          {isCompletable && (
-                            <button 
-                              onClick={() => setActionModal({ isOpen: true, id: t.id, type: 'complete' })}
-                              className="text-green-500 hover:text-green-400 transition-colors font-medium"
-                            >
-                              Completar
-                            </button>
-                          )}
-                          {isCancelable && (
-                            <button 
-                              onClick={() => setActionModal({ isOpen: true, id: t.id, type: 'cancel' })}
-                              className="text-red-500 hover:text-red-400 transition-colors font-medium"
-                            >
-                              Cancelar
-                            </button>
-                          )}
-                        </div>
+                        <StatusBadge status={b.status === 'CONFIRMED' ? 'Confirmado' : b.status === 'PENDING' ? 'Pendiente' : b.status === 'COMPLETED' ? 'Completado' : b.status === 'CANCELLED' ? 'Cancelado' : 'Ausente'} />
                       </td>
-                    )}
-                  </tr>
+                      <td className="px-6 py-4 text-right flex justify-end gap-2">
+                        {isPending && (
+                          <button onClick={() => executeAction('confirm', b.id)} disabled={isActioning} className="p-1.5 text-green-500 hover:bg-green-500/10 rounded-md transition-colors" title="Confirmar">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          </button>
+                        )}
+                        {isConfirmed && (
+                          <button onClick={() => executeAction('complete', b.id)} disabled={isActioning} className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors" title="Completar">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+                          </button>
+                        )}
+                        {(isPending || isConfirmed) && (
+                          <>
+                            <button onClick={() => executeAction('cancel', b.id)} disabled={isActioning} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-colors" title="Cancelar">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                            <button onClick={() => executeAction('noshow', b.id)} disabled={isActioning} className="p-1.5 text-orange-500 hover:bg-orange-500/10 rounded-md transition-colors" title="No asistió">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
                   );
                 })
               )}
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-gray-800 flex items-center justify-between">
+            <span className="text-gray-400 text-sm">Mostrando {(currentPage - 1) * pageSize + 1} a {Math.min(currentPage * pageSize, totalItems)} de {totalItems}</span>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => pushFilters(localFilters, currentPage - 1)}
+                disabled={currentPage <= 1}
+                className="px-3 py-1.5 bg-[#1A1A1C] border border-gray-800 text-gray-300 rounded-lg text-sm disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <button 
+                onClick={() => pushFilters(localFilters, currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1.5 bg-[#1A1A1C] border border-gray-800 text-gray-300 rounded-lg text-sm disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => !isSubmitting && setIsModalOpen(false)} title="Nuevo Turno">
-        <div className="space-y-4">
-          {error && <div className="bg-red-500/10 border border-red-500/50 text-red-400 text-sm p-3 rounded-lg">{error}</div>}
+      {/* MODAL CREAR TURNO */}
+      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Nuevo Turno">
+        <div className="space-y-4 mt-2">
+          {formError && <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">{formError}</div>}
           
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Cliente *</label>
-            <select 
-              value={customerId} 
-              onChange={e => setCustomerId(e.target.value)}
-              className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500"
-              disabled={isSubmitting}
-            >
-              <option value="">Seleccionar cliente...</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
-              ))}
+            <label className="block text-sm font-medium text-gray-300 mb-1">Cliente</label>
+            <select value={customerId} onChange={e => setCustomerId(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500">
+              <option value="">Seleccionar cliente</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Servicio *</label>
-              <select 
-                value={serviceId} 
-                onChange={e => setServiceId(e.target.value)}
-                className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500"
-                disabled={isSubmitting}
-              >
-                <option value="">Seleccionar servicio...</option>
-                {services.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-              {selectedService && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Duración: {selectedService.duration} min | Precio: ${selectedService.price}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Profesional *</label>
-              <select 
-                value={professionalId} 
-                onChange={e => setProfessionalId(e.target.value)}
-                className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500"
-                disabled={isSubmitting}
-              >
-                <option value="">Seleccionar profesional...</option>
-                {professionals.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Servicio</label>
+            <select value={serviceId} onChange={e => setServiceId(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500">
+              <option value="">Seleccionar servicio</option>
+              {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.duration} min - ${s.price})</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Profesional</label>
+            <select value={professionalId} onChange={e => setProfessionalId(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500">
+              <option value="">Seleccionar profesional</option>
+              {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Fecha *</label>
-              <input 
-                type="date" 
-                value={localDate}
-                onChange={e => setLocalDate(e.target.value)}
-                className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500 [color-scheme:dark]" 
-                disabled={isSubmitting}
-              />
+              <label className="block text-sm font-medium text-gray-300 mb-1">Fecha</label>
+              <input type="date" value={localDate} onChange={e => setLocalDate(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Hora *</label>
-              <input 
-                type="time" 
-                value={localTime}
-                onChange={e => setLocalTime(e.target.value)}
-                className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500 [color-scheme:dark]" 
-                disabled={isSubmitting}
-              />
+              <label className="block text-sm font-medium text-gray-300 mb-1">Hora</label>
+              <input type="time" value={localTime} onChange={e => setLocalTime(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500" />
             </div>
           </div>
-          
+
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Notas (Opcional)</label>
-            <input 
-              type="text" 
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500" 
-              placeholder="Ej: Primera vez" 
-              disabled={isSubmitting}
-            />
+            <label className="block text-sm font-medium text-gray-300 mb-1">Notas (opcional)</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500"></textarea>
           </div>
 
-          <div className="pt-4 flex justify-end gap-3">
-            <button onClick={() => setIsModalOpen(false)} disabled={isSubmitting} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white disabled:opacity-50">Cancelar</button>
-            <button onClick={handleSave} disabled={isSubmitting} className="px-4 py-2 bg-white text-black rounded-lg text-sm font-bold hover:bg-gray-200 disabled:opacity-50">
-              {isSubmitting ? 'Guardando...' : 'Crear turno'}
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
+            <button onClick={() => setIsCreateOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white">Cancelar</button>
+            <button onClick={handleSaveCreate} disabled={isSubmitting} className="bg-white text-black px-6 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors disabled:opacity-50">
+              {isSubmitting ? 'Guardando...' : 'Crear Turno'}
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Modal Confirmación de Acciones */}
-      <Modal isOpen={actionModal?.isOpen || false} onClose={() => !isActioning && setActionModal(null)} title={actionModal?.type === 'cancel' ? 'Cancelar Turno' : 'Completar Turno'}>
-        <div className="space-y-6">
-          <p className="text-gray-300 text-sm leading-relaxed">
-            {actionModal?.type === 'cancel' 
-              ? '¿Estás seguro que querés cancelar este turno? Este espacio quedará disponible nuevamente.' 
-              : '¿Marcar este turno como completado? Esto indica que el servicio ya fue brindado.'}
-          </p>
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setActionModal(null)} disabled={isActioning} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white disabled:opacity-50">Cerrar</button>
-            <button 
-              onClick={handleAction} 
-              disabled={isActioning} 
-              className={`px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50 ${actionModal?.type === 'cancel' ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'}`}
-            >
-              {isActioning ? 'Procesando...' : (actionModal?.type === 'cancel' ? 'Cancelar turno' : 'Completar turno')}
-            </button>
+      {/* MODAL DETALLE DE TURNO */}
+      <Modal isOpen={!!selectedBooking} onClose={() => !isActioning && setSelectedBooking(null)} title="Detalle del Turno">
+        {selectedBooking && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-bold text-white">{selectedBooking.customer.name}</h3>
+                {selectedBooking.customer.phone && <p className="text-gray-400 font-mono mt-1">{selectedBooking.customer.phone}</p>}
+                {selectedBooking.customer.email && <p className="text-gray-500 text-sm mt-1">{selectedBooking.customer.email}</p>}
+              </div>
+              <StatusBadge status={selectedBooking.status === 'CONFIRMED' ? 'Confirmado' : selectedBooking.status === 'PENDING' ? 'Pendiente' : selectedBooking.status === 'COMPLETED' ? 'Completado' : selectedBooking.status === 'CANCELLED' ? 'Cancelado' : 'Ausente'} />
+            </div>
+            
+            <div className="bg-[#1A1A1C] border border-gray-800 rounded-lg p-4 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Servicio</span>
+                <span className="text-white font-medium">{selectedBooking.serviceName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Duración</span>
+                <span className="text-white font-medium">{selectedBooking.serviceDuration} min</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Precio</span>
+                <span className="text-green-400 font-medium">${selectedBooking.servicePrice}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Profesional</span>
+                <span className="text-white font-medium">{selectedBooking.professional.name}</span>
+              </div>
+              <div className="pt-3 mt-3 border-t border-gray-800 flex justify-between items-center">
+                <span className="text-gray-400">Horario</span>
+                <span className="text-white font-mono font-bold">
+                  {formatBusinessDate(selectedBooking.startAt, businessTimezone, 'dd/MM/yyyy HH:mm')}
+                </span>
+              </div>
+            </div>
+
+            {selectedBooking.notes && (
+              <div>
+                <p className="text-sm text-gray-400 mb-1">Notas</p>
+                <p className="text-white bg-[#1A1A1C] p-3 rounded-lg border border-gray-800">{selectedBooking.notes}</p>
+              </div>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-gray-800">
+              <button onClick={() => setSelectedBooking(null)} disabled={isActioning} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">
+                Cerrar
+              </button>
+              {selectedBooking.status === 'PENDING' && (
+                <button onClick={() => executeAction('confirm', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+                  Confirmar
+                </button>
+              )}
+              {selectedBooking.status === 'CONFIRMED' && (
+                <button onClick={() => executeAction('complete', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+                  Completar
+                </button>
+              )}
+              {(selectedBooking.status === 'PENDING' || selectedBooking.status === 'CONFIRMED') && (
+                <>
+                  <button onClick={() => executeAction('noshow', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+                    Ausente
+                  </button>
+                  <button onClick={() => executeAction('cancel', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+                    Cancelar
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </Modal>
 
     </div>
