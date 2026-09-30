@@ -1,7 +1,9 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { BusinessHour } from '@prisma/client';
 import DashboardHeader from '../DashboardHeader';
+import HorariosClient from './HorariosClient';
 
 export default async function ConfiguracionPage() {
   const session = await getServerSession(authOptions);
@@ -9,6 +11,13 @@ export default async function ConfiguracionPage() {
   const business = await prisma.business.findUnique({
     where: { id: session?.user?.businessId },
   });
+
+  let hours: BusinessHour[] = [];
+  if (session?.user?.businessId) {
+    hours = await prisma.businessHour.findMany({
+      where: { businessId: session.user.businessId }
+    });
+  }
 
   const userName = session?.user?.name || 'Usuario';
   const userEmail = session?.user?.email || 'demo@ejemplo.com';
@@ -103,6 +112,9 @@ export default async function ConfiguracionPage() {
                 </div>
               </div>
             </div>
+
+            {/* HORARIOS */}
+            <HorariosClient initialHours={hours} userRole={userRole} />
 
           </div>
         </div>

@@ -15,6 +15,7 @@ model Business {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  timezone  String   @default("America/Argentina/Buenos_Aires")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -23,6 +24,8 @@ model Business {
   services      Service[]
   professionals Professional[]
   customers     Customer[]
+  businessHours BusinessHour[]
+  blockedTimes  BlockedTime[]
 }
 
 model User {
@@ -91,4 +94,43 @@ model Customer {
   business Business @relation(fields: [businessId], references: [id])
 
   @@index([businessId])
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model BusinessHour {
+  id          String    @id @default(cuid())
+  businessId  String
+  dayOfWeek   DayOfWeek
+  startMinute Int // En minutos desde medianoche (ej. 09:00 = 540)
+  endMinute   Int // En minutos desde medianoche (ej. 13:00 = 780)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, dayOfWeek])
+}
+
+model BlockedTime {
+  id          String   @id @default(cuid())
+  businessId  String
+  date        DateTime @db.Date // Representa el día calendario local de la excepción
+  startMinute Int // 0 a 1440. Si es todo el día, 0 a 1440
+  endMinute   Int // 0 a 1440
+  title       String? // Ej. "Feriado", "Vacaciones"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, date])
 }
