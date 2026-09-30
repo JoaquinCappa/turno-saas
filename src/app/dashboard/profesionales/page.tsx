@@ -1,7 +1,22 @@
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import prisma from '@/lib/prisma';
 import DashboardHeader from '../DashboardHeader';
 import ProfesionalesClient from './ProfesionalesClient';
 
-export default function ProfesionalesPage() {
+import { Professional } from '@prisma/client';
+
+export default async function ProfesionalesPage() {
+  const session = await getServerSession(authOptions);
+
+  let professionals: Professional[] = [];
+  if (session?.user?.businessId) {
+    professionals = await prisma.professional.findMany({
+      where: { businessId: session.user.businessId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   return (
     <>
       <DashboardHeader title="Profesionales" />
@@ -11,7 +26,10 @@ export default function ProfesionalesPage() {
             <h1 className="text-3xl font-bold text-white mb-2">Profesionales</h1>
             <p className="text-gray-400">Administrá las personas que trabajan en tu negocio.</p>
           </div>
-          <ProfesionalesClient />
+          <ProfesionalesClient 
+            initialProfessionals={professionals} 
+            userRole={session?.user?.role || 'STAFF'} 
+          />
         </div>
       </div>
     </>
