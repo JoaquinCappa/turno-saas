@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import LogoutButton from './LogoutButton';
 
-export default function SidebarNav({ businessName }: { businessName: string }) {
+export default function SidebarNav({ businessName, userRole }: { businessName: string; userRole: string }) {
   const pathname = usePathname();
 
   const navItems = [
@@ -15,6 +15,14 @@ export default function SidebarNav({ businessName }: { businessName: string }) {
     { href: '/dashboard/profesionales', label: 'Profesionales', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /> },
     { href: '/dashboard/clientes', label: 'Clientes', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /> },
   ];
+
+  if (userRole === 'OWNER') {
+    navItems.push({
+      href: '/dashboard/equipo',
+      label: 'Equipo',
+      icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+    });
+  }
 
   return (
     <aside className="w-full md:w-64 bg-[#111113] border-b md:border-b-0 md:border-r border-gray-800 flex flex-col flex-shrink-0">
