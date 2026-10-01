@@ -3,14 +3,23 @@
 import { useState } from 'react';
 import { updateBusiness } from '@/app/actions/business';
 
-const FieldRow = ({ label, value, onChange, isEditing, type = "text", placeholder = "" }: any) => (
+interface FieldRowProps {
+  label: string;
+  value: string | null | undefined;
+  onChange: (value: string) => void;
+  isEditing: boolean;
+  type?: string;
+  placeholder?: string;
+}
+
+const FieldRow = ({ label, value, onChange, isEditing, type = "text", placeholder = "" }: FieldRowProps) => (
   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
     <div className="text-sm font-medium text-gray-400">{label}</div>
     <div className="sm:col-span-2">
       {isEditing ? (
         type === "textarea" ? (
            <textarea 
-             value={value} 
+             value={value || ""} 
              onChange={e => onChange(e.target.value)} 
              placeholder={placeholder}
              rows={3}
@@ -19,7 +28,7 @@ const FieldRow = ({ label, value, onChange, isEditing, type = "text", placeholde
         ) : (
           <input 
             type={type} 
-            value={value} 
+            value={value || ""} 
             onChange={e => onChange(e.target.value)} 
             placeholder={placeholder}
             className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500"
