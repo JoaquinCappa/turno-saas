@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createBusinessDate, getBusinessDayAndMinute, calculateEndAt } from '@/lib/date-utils';
 import { BookingStatus } from '@prisma/client';
-import { sendBookingCreatedEmail } from '@/lib/notifications';
+import { sendBookingCreatedEmail, sendBookingCancelledEmail } from '@/lib/notifications';
 
 function canTransition(current: BookingStatus, next: BookingStatus): boolean {
   if (current === 'PENDING') {
@@ -202,6 +202,13 @@ export async function cancelBooking(id: string) {
       where: { id },
       data: { status: 'CANCELLED' }
     });
+
+    // Enviar notificación después de cancelar la reserva
+    try {
+      await sendBookingCancelledEmail(id);
+    } catch (e) {
+      console.error('Error no bloqueante al despachar notificación de cancelación:', e);
+    }
 
     revalidatePath('/dashboard/turnos');
     return { success: true };
