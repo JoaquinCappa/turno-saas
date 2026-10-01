@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createBusinessDate, getBusinessDayAndMinute, calculateEndAt } from '@/lib/date-utils';
 import { BookingStatus } from '@prisma/client';
+import { sendBookingCreatedEmail } from '@/lib/notifications';
 
 function canTransition(current: BookingStatus, next: BookingStatus): boolean {
   if (current === 'PENDING') {
@@ -134,6 +135,15 @@ export async function executeBooking(
         }
       });
     });
+
+    // Enviar notificación después de crear la reserva.
+    // Se utiliza await para asegurar su ejecución en Next.js (serverless),
+    // pero el try/catch aísla cualquier error del proveedor para no revertir la reserva.
+    try {
+      await sendBookingCreatedEmail(booking.id);
+    } catch (e) {
+      console.error('Error no bloqueante al despachar notificación:', e);
+    }
 
     return { success: true, bookingId: booking.id };
   } catch (error) {
