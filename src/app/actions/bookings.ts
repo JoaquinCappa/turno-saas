@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { createBusinessDate, getBusinessDayAndMinute, calculateEndAt } from '@/lib/date-utils';
 import { BookingStatus } from '@prisma/client';
 import { sendBookingCreatedEmail, sendBookingCancelledEmail } from '@/lib/notifications';
+import crypto from 'crypto';
 
 function canTransition(current: BookingStatus, next: BookingStatus): boolean {
   if (current === 'PENDING') {
@@ -83,7 +84,7 @@ export async function executeBooking(
     // 4. Concurrencia y Solapamiento (Postgres Advisory Lock)
     // El bloqueo consultivo por profesional encola las peticiones simultáneas, 
     // evitando race conditions y falsos positivos de Serializable.
-    const booking = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${data.professionalId}));`;
 
@@ -118,8 +119,11 @@ export async function executeBooking(
         throw new Error('El profesional ya tiene un turno en ese horario');
       }
 
+      const managementToken = crypto.randomBytes(32).toString('hex');
+      const managementTokenHash = crypto.createHash('sha256').update(managementToken).digest('hex');
+
       // Crear Booking
-      return await tx.booking.create({
+      const booking = await tx.booking.create({
         data: {
           businessId,
           customerId: data.customerId,
@@ -131,21 +135,24 @@ export async function executeBooking(
           serviceDuration: service.duration,
           servicePrice: service.price,
           notes: data.notes || null,
+          managementTokenHash,
           status: 'CONFIRMED' // Para esta iteración, se confirma automáticamente
         }
       });
+      
+      return { booking, managementToken };
     });
 
     // Enviar notificación después de crear la reserva.
     // Se utiliza await para asegurar su ejecución en Next.js (serverless),
     // pero el try/catch aísla cualquier error del proveedor para no revertir la reserva.
     try {
-      await sendBookingCreatedEmail(booking.id);
+      await sendBookingCreatedEmail(result.booking.id, result.managementToken);
     } catch (e) {
       console.error('Error no bloqueante al despachar notificación:', e);
     }
 
-    return { success: true, bookingId: booking.id };
+    return { success: true, bookingId: result.booking.id };
   } catch (error) {
     console.error('Error creating booking:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Error al procesar el turno' };

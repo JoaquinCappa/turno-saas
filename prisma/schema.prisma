@@ -172,6 +172,8 @@ model Booking {
   status BookingStatus @default(PENDING)
   notes  String?
 
+  managementTokenHash String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

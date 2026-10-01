@@ -7,7 +7,7 @@ const emailFrom = process.env.EMAIL_FROM;
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
-export async function sendBookingCreatedEmail(bookingId: string) {
+export async function sendBookingCreatedEmail(bookingId: string, managementToken?: string) {
   if (!resendApiKey || !emailFrom || !resend) {
     console.warn('RESEND_API_KEY o EMAIL_FROM no configurados. Se omite el envío de email para la reserva:', bookingId);
     return { success: false, reason: 'missing_config' };
@@ -43,6 +43,23 @@ export async function sendBookingCreatedEmail(bookingId: string) {
 
     const addressLine = business.address ? `<p><strong>Dirección:</strong> ${business.address}</p>` : '';
 
+    let managementLinkHtml = '';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+    if (managementToken) {
+      if (appUrl) {
+        const cleanUrl = appUrl.replace(/\/$/, '');
+        const tokenUrl = `${cleanUrl}/mi-turno/${managementToken}`;
+        managementLinkHtml = `
+          <div style="margin-top: 32px; text-align: center;">
+            <a href="${tokenUrl}" style="background-color: #111; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Gestionar mi turno</a>
+          </div>
+        `;
+      } else {
+        console.warn('NEXT_PUBLIC_APP_URL no configurado. Se omite enlace de gestión para la reserva:', bookingId);
+      }
+    }
+
     const htmlTemplate = `
       <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
         <h2 style="color: #000; margin-bottom: 20px;">¡Tu reserva está confirmada!</h2>
@@ -59,9 +76,11 @@ export async function sendBookingCreatedEmail(bookingId: string) {
           <p style="margin: 8px 0;"><strong>Precio:</strong> $${booking.servicePrice.toString()}</p>
           ${addressLine}
         </div>
+
+        ${managementLinkHtml}
         
-        <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 15px;">
-          Si tenés alguna duda o necesitás cancelar, por favor comunicate directamente con el negocio.
+        <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 15px; margin-top: 24px;">
+          Si tenés alguna duda o necesitás cancelar, por favor comunicate directamente con el negocio o usá el botón de gestión.
         </p>
       </div>
     `;
