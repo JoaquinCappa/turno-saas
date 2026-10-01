@@ -48,6 +48,12 @@ export default async function ConfiguracionPage() {
               initialName={business.name}
               initialSlug={business.slug}
               initialTimezone={business.timezone}
+              initialDescription={business.description}
+              initialPhone={business.phone}
+              initialEmail={business.email}
+              initialAddress={business.address}
+              initialLogoUrl={business.logoUrl}
+              initialCoverImageUrl={business.coverImageUrl}
               userRole={userRole}
             />
 

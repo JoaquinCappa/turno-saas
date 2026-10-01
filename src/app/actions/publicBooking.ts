@@ -7,7 +7,19 @@ import { executeBooking } from './bookings'; // Note: I need to export executeBo
 export async function getPublicBusiness(slug: string) {
   const business = await prisma.business.findUnique({
     where: { slug },
-    select: { id: true, name: true, slug: true, timezone: true, isActive: true }
+    select: { 
+      id: true, 
+      name: true, 
+      slug: true, 
+      timezone: true, 
+      isActive: true,
+      description: true,
+      phone: true,
+      email: true,
+      address: true,
+      logoUrl: true,
+      coverImageUrl: true
+    }
   });
   if (!business || !business.isActive) return null;
   return business;

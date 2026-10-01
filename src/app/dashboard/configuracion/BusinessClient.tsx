@@ -3,15 +3,56 @@
 import { useState } from 'react';
 import { updateBusiness } from '@/app/actions/business';
 
+const FieldRow = ({ label, value, onChange, isEditing, type = "text", placeholder = "" }: any) => (
+  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+    <div className="text-sm font-medium text-gray-400">{label}</div>
+    <div className="sm:col-span-2">
+      {isEditing ? (
+        type === "textarea" ? (
+           <textarea 
+             value={value} 
+             onChange={e => onChange(e.target.value)} 
+             placeholder={placeholder}
+             rows={3}
+             className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500"
+           />
+        ) : (
+          <input 
+            type={type} 
+            value={value} 
+            onChange={e => onChange(e.target.value)} 
+            placeholder={placeholder}
+            className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500"
+          />
+        )
+      ) : (
+        <span className="text-white font-medium">{value || <span className="text-gray-600 italic">No configurado</span>}</span>
+      )}
+    </div>
+  </div>
+);
+
 export default function BusinessClient({
   initialName,
   initialSlug,
   initialTimezone,
+  initialDescription,
+  initialPhone,
+  initialEmail,
+  initialAddress,
+  initialLogoUrl,
+  initialCoverImageUrl,
   userRole
 }: {
   initialName: string;
   initialSlug: string;
   initialTimezone: string;
+  initialDescription?: string | null;
+  initialPhone?: string | null;
+  initialEmail?: string | null;
+  initialAddress?: string | null;
+  initialLogoUrl?: string | null;
+  initialCoverImageUrl?: string | null;
   userRole: string;
 }) {
   const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
@@ -19,6 +60,12 @@ export default function BusinessClient({
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(initialName);
   const [timezone, setTimezone] = useState(initialTimezone);
+  const [description, setDescription] = useState(initialDescription || '');
+  const [phone, setPhone] = useState(initialPhone || '');
+  const [email, setEmail] = useState(initialEmail || '');
+  const [address, setAddress] = useState(initialAddress || '');
+  const [logoUrl, setLogoUrl] = useState(initialLogoUrl || '');
+  const [coverImageUrl, setCoverImageUrl] = useState(initialCoverImageUrl || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -28,7 +75,16 @@ export default function BusinessClient({
     setSuccessMsg('');
     setIsSubmitting(true);
     
-    const res = await updateBusiness({ name, timezone });
+    const res = await updateBusiness({ 
+      name, 
+      timezone,
+      description,
+      phone,
+      email,
+      address,
+      logoUrl,
+      coverImageUrl
+    });
     
     setIsSubmitting(false);
     if (res.success) {
@@ -38,6 +94,19 @@ export default function BusinessClient({
     } else {
       setError(res.error || 'Error al actualizar');
     }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setName(initialName);
+    setTimezone(initialTimezone);
+    setDescription(initialDescription || '');
+    setPhone(initialPhone || '');
+    setEmail(initialEmail || '');
+    setAddress(initialAddress || '');
+    setLogoUrl(initialLogoUrl || '');
+    setCoverImageUrl(initialCoverImageUrl || '');
+    setError('');
   };
 
   const commonTimezones = [
@@ -59,28 +128,21 @@ export default function BusinessClient({
       <div className="p-6 space-y-4">
         {error && <div className="bg-red-500/10 border border-red-500/50 text-red-400 text-sm p-3 rounded-lg">{error}</div>}
         
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-          <div className="text-sm font-medium text-gray-400">Nombre</div>
-          <div className="sm:col-span-2">
-            {isEditing ? (
-              <input 
-                type="text" 
-                value={name} 
-                onChange={e => setName(e.target.value)} 
-                className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500"
-              />
-            ) : (
-              <span className="text-white font-medium">{name}</span>
-            )}
-          </div>
-        </div>
-
+        <FieldRow label="Nombre" value={name} onChange={setName} isEditing={isEditing} />
+        
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
           <div className="text-sm font-medium text-gray-400">Slug</div>
           <div className="sm:col-span-2 text-gray-400 font-mono text-sm">
             {initialSlug} <span className="text-xs text-gray-600 ml-2">(Solo lectura)</span>
           </div>
         </div>
+
+        <FieldRow label="Descripción" value={description} onChange={setDescription} isEditing={isEditing} type="textarea" placeholder="Breve descripción del negocio" />
+        <FieldRow label="Teléfono" value={phone} onChange={setPhone} isEditing={isEditing} placeholder="+54 9 11 1234-5678" />
+        <FieldRow label="Email" value={email} onChange={setEmail} isEditing={isEditing} type="email" placeholder="contacto@negocio.com" />
+        <FieldRow label="Dirección" value={address} onChange={setAddress} isEditing={isEditing} placeholder="Calle Falsa 123, CABA" />
+        <FieldRow label="URL Logo" value={logoUrl} onChange={setLogoUrl} isEditing={isEditing} type="url" placeholder="https://..." />
+        <FieldRow label="URL Portada" value={coverImageUrl} onChange={setCoverImageUrl} isEditing={isEditing} type="url" placeholder="https://..." />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
           <div className="text-sm font-medium text-gray-400">Zona Horaria</div>
@@ -91,7 +153,6 @@ export default function BusinessClient({
                 onChange={e => setTimezone(e.target.value)}
                 className="w-full bg-[#1A1A1C] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-500"
               >
-                {/* Adding current timezone if not in common list */}
                 {!commonTimezones.includes(initialTimezone) && (
                   <option value={initialTimezone}>{initialTimezone}</option>
                 )}
@@ -117,7 +178,7 @@ export default function BusinessClient({
         <div className="px-6 py-4 bg-[#1A1A1C] border-t border-gray-800 flex justify-end gap-3">
           {isEditing ? (
             <>
-              <button onClick={() => { setIsEditing(false); setName(initialName); setTimezone(initialTimezone); setError(''); }} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">Cancelar</button>
+              <button onClick={handleCancel} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">Cancelar</button>
               <button onClick={handleSave} disabled={isSubmitting} className="px-4 py-2 bg-white text-black text-sm font-bold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50">
                 {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
               </button>
