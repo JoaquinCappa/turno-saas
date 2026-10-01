@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import crypto from 'crypto';
 import { toZonedTime, format } from 'date-fns-tz';
 import PublicCancelButton from './PublicCancelButton';
+import PublicRescheduleButton from './PublicRescheduleButton';
 
 export default async function PublicBookingPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -133,7 +134,10 @@ export default async function PublicBookingPage({ params }: { params: Promise<{ 
           </div>
 
           {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
-            <PublicCancelButton token={token} />
+            <div className="flex justify-center gap-4 mt-6">
+              <PublicRescheduleButton token={token} initialDate={format(toZonedTime(new Date(), business.timezone), 'yyyy-MM-dd')} />
+              <PublicCancelButton token={token} />
+            </div>
           )}
         </div>
       </div>

@@ -65,7 +65,7 @@ export async function sendBookingCreatedEmail(bookingId: string, managementToken
         <h2 style="color: #000; margin-bottom: 20px;">¡Tu reserva está confirmada!</h2>
         <p style="font-size: 16px;">Hola <strong>${customer.name}</strong>,</p>
         <p style="font-size: 16px; margin-bottom: 24px;">Tu turno en <strong>${business.name}</strong> ha sido agendado exitosamente.</p>
-        
+
         <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 24px;">
           <h3 style="margin-top: 0; color: #555;">Detalles del turno</h3>
           <p style="margin: 8px 0;"><strong>Servicio:</strong> ${booking.serviceName}</p>
@@ -78,7 +78,7 @@ export async function sendBookingCreatedEmail(bookingId: string, managementToken
         </div>
 
         ${managementLinkHtml}
-        
+
         <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 15px; margin-top: 24px;">
           Si tenés alguna duda o necesitás cancelar, por favor comunicate directamente con el negocio o usá el botón de gestión.
         </p>
@@ -145,7 +145,7 @@ export async function sendBookingCancelledEmail(bookingId: string) {
         <h2 style="color: #000; margin-bottom: 20px;">Tu turno fue cancelado</h2>
         <p style="font-size: 16px;">Hola <strong>${customer.name}</strong>,</p>
         <p style="font-size: 16px; margin-bottom: 24px;">Te informamos que tu turno agendado en <strong>${business.name}</strong> ha sido cancelado.</p>
-        
+
         <div style="background-color: #fff3f3; padding: 15px; border-radius: 8px; margin-bottom: 24px; border-left: 4px solid #ff4444;">
           <h3 style="margin-top: 0; color: #cc0000;">Detalles del turno cancelado</h3>
           <p style="margin: 8px 0;"><strong>Servicio:</strong> ${booking.serviceName}</p>
@@ -154,7 +154,7 @@ export async function sendBookingCancelledEmail(bookingId: string) {
           <p style="margin: 8px 0;"><strong>Horario:</strong> ${timeStartStr} a ${timeEndStr}</p>
           ${addressLine}
         </div>
-        
+
         <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 15px;">
           Si considerás que esto es un error o necesitás reagendar, por favor comunicate directamente con el negocio.
         </p>
@@ -176,6 +176,98 @@ export async function sendBookingCancelledEmail(bookingId: string) {
     return { success: true, id: result.data?.id };
   } catch (error) {
     console.error('Excepción al intentar enviar email de cancelación con Resend:', error);
+    return { success: false, reason: 'exception', error };
+  }
+}
+
+export async function sendBookingRescheduledEmail(bookingId: string, managementToken?: string) {
+  if (!resendApiKey || !emailFrom || !resend) {
+    console.warn('RESEND_API_KEY o EMAIL_FROM no configurados. Se omite el envío de email de reprogramación para la reserva:', bookingId);
+    return { success: false, reason: 'missing_config' };
+  }
+
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        customer: true,
+        business: true,
+        professional: true
+      }
+    });
+
+    if (!booking) {
+      console.error('Booking no encontrada para notificar reprogramación:', bookingId);
+      return { success: false, reason: 'booking_not_found' };
+    }
+
+    if (!booking.customer.email) {
+      return { success: false, reason: 'no_customer_email' };
+    }
+
+    const { customer, business, professional } = booking;
+    const zonedStart = toZonedTime(booking.startAt, business.timezone);
+    const zonedEnd = toZonedTime(booking.endAt, business.timezone);
+
+    const dateStr = format(zonedStart, 'dd/MM/yyyy');
+    const timeStartStr = format(zonedStart, 'HH:mm');
+    const timeEndStr = format(zonedEnd, 'HH:mm');
+
+    const addressLine = business.address ? `<p><strong>Dirección:</strong> ${business.address}</p>` : '';
+
+    let managementLinkHtml = '';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+    if (managementToken) {
+      if (appUrl) {
+        const cleanUrl = appUrl.replace(/\/$/, '');
+        const tokenUrl = `${cleanUrl}/mi-turno/${managementToken}`;
+        managementLinkHtml = `
+          <div style="margin-top: 32px; text-align: center;">
+            <a href="${tokenUrl}" style="background-color: #111; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Gestionar mi turno</a>
+          </div>
+        `;
+      }
+    }
+
+    const htmlTemplate = `
+      <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+        <h2 style="color: #000; margin-bottom: 20px;">Tu turno fue reprogramado</h2>
+        <p style="font-size: 16px;">Hola <strong>${customer.name}</strong>,</p>
+        <p style="font-size: 16px; margin-bottom: 24px;">Te informamos que tu turno en <strong>${business.name}</strong> ha sido reprogramado. Aquí tienes los nuevos detalles:</p>
+
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 24px;">
+          <h3 style="margin-top: 0; color: #555;">Nuevos detalles del turno</h3>
+          <p style="margin: 8px 0;"><strong>Servicio:</strong> ${booking.serviceName}</p>
+          <p style="margin: 8px 0;"><strong>Profesional:</strong> ${professional.name}</p>
+          <p style="margin: 8px 0;"><strong>Fecha:</strong> ${dateStr}</p>
+          <p style="margin: 8px 0;"><strong>Horario:</strong> ${timeStartStr} a ${timeEndStr}</p>
+          ${addressLine}
+        </div>
+
+        ${managementLinkHtml}
+
+        <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 15px; margin-top: 24px;">
+          Si tenés alguna duda, comunicate directamente con el negocio o usá el botón de gestión.
+        </p>
+      </div>
+    `;
+
+    const result = await resend.emails.send({
+      from: emailFrom,
+      to: customer.email!,
+      subject: `Turno reprogramado en ${business.name}`,
+      html: htmlTemplate
+    });
+
+    if (result.error) {
+      console.error('Error desde Resend API:', result.error);
+      return { success: false, reason: 'provider_error', error: result.error };
+    }
+
+    return { success: true, id: result.data?.id };
+  } catch (error) {
+    console.error('Excepción al intentar enviar email con Resend:', error);
     return { success: false, reason: 'exception', error };
   }
 }

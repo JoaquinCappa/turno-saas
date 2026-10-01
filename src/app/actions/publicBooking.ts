@@ -9,11 +9,11 @@ import { revalidatePath } from 'next/cache';
 export async function getPublicBusiness(slug: string) {
   const business = await prisma.business.findUnique({
     where: { slug },
-    select: { 
-      id: true, 
-      name: true, 
-      slug: true, 
-      timezone: true, 
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      timezone: true,
       isActive: true,
       description: true,
       phone: true,
@@ -45,11 +45,12 @@ export async function getAvailableTimes(
   businessId: string,
   serviceId: string,
   professionalId: string,
-  localDate: string
+  localDate: string,
+  excludeBookingId?: string
 ) {
   const business = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true, isActive: true } });
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
-  
+
   if (!business || !business.isActive || !service) return [];
 
   // Assuming localDate is "YYYY-MM-DD"
@@ -77,7 +78,8 @@ export async function getAvailableTimes(
       businessId,
       professionalId,
       status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-      startAt: { gte: dayStart, lte: dayEnd }
+      startAt: { gte: dayStart, lte: dayEnd },
+      id: excludeBookingId ? { not: excludeBookingId } : undefined
     }
   });
 
@@ -197,5 +199,103 @@ export async function cancelPublicBooking(token: string) {
   } catch (error) {
     console.error('Error in cancelPublicBooking:', error);
     return { success: false, error: 'Error al procesar la cancelación.' };
+  }
+}
+
+export async function getAvailableTimesForReschedule(token: string, localDate: string) {
+  if (!token || typeof token !== 'string') return [];
+  const managementTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const booking = await prisma.booking.findUnique({
+    where: { managementTokenHash },
+    select: { id: true, businessId: true, serviceId: true, professionalId: true, status: true }
+  });
+
+  if (!booking) return [];
+  if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') return [];
+
+  return getAvailableTimes(booking.businessId, booking.serviceId, booking.professionalId, localDate, booking.id);
+}
+
+import { sendBookingRescheduledEmail } from '@/lib/notifications';
+
+export async function reschedulePublicBooking(token: string, localDate: string, localTime: string) {
+  if (!token || typeof token !== 'string') {
+    return { success: false, error: 'El enlace de gestión no es válido.' };
+  }
+
+  const managementTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({
+        where: { managementTokenHash },
+        include: { business: true }
+      });
+
+      if (!booking) throw new Error('El enlace de gestión no es válido.');
+      if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
+        throw new Error('Este turno ya no puede reprogramarse.');
+      }
+
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.professionalId}));`;
+
+      const startAt = createBusinessDate(localDate, localTime, booking.business.timezone);
+      const endAt = calculateEndAt(startAt, booking.serviceDuration);
+      const now = new Date();
+      if (startAt < now) throw new Error('El horario no puede ser en el pasado.');
+
+      const exactDate = new Date(`${localDate}T00:00:00Z`);
+      const blocks = await tx.blockedTime.findMany({
+        where: { businessId: booking.businessId, date: exactDate }
+      });
+      const [hour, minute] = localTime.split(':').map(Number);
+      const startMinute = hour * 60 + minute;
+      const endMinute = startMinute + booking.serviceDuration;
+      const isBlocked = blocks.some(b => Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute));
+
+      if (isBlocked) throw new Error('El horario está bloqueado excepcionalmente.');
+
+      const overlaps = await tx.booking.findMany({
+        where: {
+          businessId: booking.businessId,
+          professionalId: booking.professionalId,
+          status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+          id: { not: booking.id },
+          startAt: { lt: endAt },
+          endAt: { gt: startAt }
+        }
+      });
+
+      if (overlaps.length > 0) {
+        throw new Error('Este horario acaba de ser ocupado. Elegí otro.');
+      }
+
+      const updated = await tx.booking.updateMany({
+        where: {
+          id: booking.id,
+          status: { in: ['PENDING', 'CONFIRMED'] }
+        },
+        data: { startAt, endAt }
+      });
+
+      if (updated.count !== 1) {
+        throw new Error('Este turno ya no puede reprogramarse.');
+      }
+
+      return { id: booking.id };
+    });
+
+    try {
+      await sendBookingRescheduledEmail(result.id, token);
+    } catch (e) {
+      console.error('Error no bloqueante al despachar notificación de reprogramación:', e);
+    }
+
+    revalidatePath(`/mi-turno/${token}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error in reschedulePublicBooking:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al procesar la reprogramación.' };
   }
 }
