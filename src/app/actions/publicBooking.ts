@@ -192,6 +192,11 @@ export async function cancelPublicBooking(token: string) {
     const result = await internalCancelBooking(booking.id);
 
     if (result.success) {
+      try {
+        await sendBookingCancelledAdminEmail(booking.id);
+      } catch (e) {
+        console.error('Error no bloqueante al despachar notificación administrativa de cancelación:', e);
+      }
       revalidatePath(`/mi-turno/${token}`);
     }
 
@@ -217,7 +222,11 @@ export async function getAvailableTimesForReschedule(token: string, localDate: s
   return getAvailableTimes(booking.businessId, booking.serviceId, booking.professionalId, localDate, booking.id);
 }
 
-import { sendBookingRescheduledEmail } from '@/lib/notifications';
+import {
+  sendBookingRescheduledEmail,
+  sendBookingCancelledAdminEmail,
+  sendBookingRescheduledAdminEmail
+} from '@/lib/notifications';
 
 export async function reschedulePublicBooking(token: string, localDate: string, localTime: string) {
   if (!token || typeof token !== 'string') {
@@ -283,13 +292,23 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
         throw new Error('Este turno ya no puede reprogramarse.');
       }
 
-      return { id: booking.id };
+      return {
+        id: booking.id,
+        oldStartAt: booking.startAt,
+        oldEndAt: booking.endAt
+      };
     });
 
     try {
       await sendBookingRescheduledEmail(result.id, token);
     } catch (e) {
       console.error('Error no bloqueante al despachar notificación de reprogramación:', e);
+    }
+
+    try {
+      await sendBookingRescheduledAdminEmail(result.id, result.oldStartAt, result.oldEndAt);
+    } catch (e) {
+      console.error('Error no bloqueante al despachar notificación administrativa de reprogramación:', e);
     }
 
     revalidatePath(`/mi-turno/${token}`);

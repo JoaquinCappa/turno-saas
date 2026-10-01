@@ -6,7 +6,11 @@ import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createBusinessDate, getBusinessDayAndMinute, calculateEndAt } from '@/lib/date-utils';
 import { BookingStatus } from '@prisma/client';
-import { sendBookingCreatedEmail, sendBookingCancelledEmail } from '@/lib/notifications';
+import {
+  sendBookingCreatedEmail,
+  sendBookingCancelledEmail,
+  sendBookingCreatedAdminEmail
+} from '@/lib/notifications';
 import crypto from 'crypto';
 
 function canTransition(current: BookingStatus, next: BookingStatus): boolean {
@@ -66,7 +70,7 @@ export async function executeBooking(
     // 3. Validar disponibilidad básica (Horarios de negocio)
     const { dayOfWeek, minuteOfDay: startMinute } = getBusinessDayAndMinute(startAt, business.timezone);
     const { minuteOfDay: endMinute } = getBusinessDayAndMinute(endAt, business.timezone);
-    
+
     // Si cruza la medianoche (endMinute < startMinute), en esta iteración lo rechazaremos por simplicidad.
     if (endMinute <= startMinute) {
       return { success: false, error: 'El turno no puede cruzar la medianoche' };
@@ -82,10 +86,10 @@ export async function executeBooking(
     }
 
     // 4. Concurrencia y Solapamiento (Postgres Advisory Lock)
-    // El bloqueo consultivo por profesional encola las peticiones simultáneas, 
+    // El bloqueo consultivo por profesional encola las peticiones simultáneas,
     // evitando race conditions y falsos positivos de Serializable.
     const result = await prisma.$transaction(async (tx) => {
-      
+
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${data.professionalId}));`;
 
       // Chequear BlockedTimes (excepciones de fecha completa o intervalo)
@@ -93,7 +97,7 @@ export async function executeBooking(
       const blocks = await tx.blockedTime.findMany({
         where: { businessId, date: exactDate }
       });
-      
+
       const isBlocked = blocks.some(b => {
         return Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute);
       });
@@ -139,7 +143,7 @@ export async function executeBooking(
           status: 'CONFIRMED' // Para esta iteración, se confirma automáticamente
         }
       });
-      
+
       return { booking, managementToken };
     });
 
@@ -150,6 +154,12 @@ export async function executeBooking(
       await sendBookingCreatedEmail(result.booking.id, result.managementToken);
     } catch (e) {
       console.error('Error no bloqueante al despachar notificación:', e);
+    }
+
+    try {
+      await sendBookingCreatedAdminEmail(result.booking.id);
+    } catch (e) {
+      console.error('Error no bloqueante al despachar notificación administrativa:', e);
     }
 
     return { success: true, bookingId: result.booking.id };
