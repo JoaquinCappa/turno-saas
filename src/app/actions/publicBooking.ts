@@ -2,7 +2,9 @@
 
 import prisma from '@/lib/prisma';
 import { getBusinessDayAndMinute, createBusinessDate, calculateEndAt } from '@/lib/date-utils';
-import { executeBooking } from './bookings'; // Note: I need to export executeBooking!
+import { executeBooking, internalCancelBooking } from './bookings';
+import crypto from 'crypto';
+import { revalidatePath } from 'next/cache';
 
 export async function getPublicBusiness(slug: string) {
   const business = await prisma.business.findUnique({
@@ -165,4 +167,35 @@ export async function createPublicBooking(data: {
     localTime: data.localTime,
     notes: data.notes
   });
+}
+
+export async function cancelPublicBooking(token: string) {
+  if (!token || typeof token !== 'string') {
+    return { success: false, error: 'El enlace de gestión no es válido.' };
+  }
+
+  const managementTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { managementTokenHash },
+      select: { id: true, status: true }
+    });
+
+    if (!booking) {
+      return { success: false, error: 'El enlace de gestión no es válido.' };
+    }
+
+    // Call the internal cancellation logic (which guarantees atomicity and sends email)
+    const result = await internalCancelBooking(booking.id);
+
+    if (result.success) {
+      revalidatePath(`/mi-turno/${token}`);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error in cancelPublicBooking:', error);
+    return { success: false, error: 'Error al procesar la cancelación.' };
+  }
 }

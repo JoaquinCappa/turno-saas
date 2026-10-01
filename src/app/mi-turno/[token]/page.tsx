@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import crypto from 'crypto';
 import { toZonedTime, format } from 'date-fns-tz';
+import PublicCancelButton from './PublicCancelButton';
 
 export default async function PublicBookingPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -130,6 +131,10 @@ export default async function PublicBookingPage({ params }: { params: Promise<{ 
           <div className="text-center text-sm text-gray-500 pt-2">
             <p>Para cualquier consulta, comunicate con el negocio.</p>
           </div>
+
+          {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+            <PublicCancelButton token={token} />
+          )}
         </div>
       </div>
     </main>

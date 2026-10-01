@@ -187,6 +187,30 @@ export async function createBooking(data: {
   return res;
 }
 
+export async function internalCancelBooking(id: string) {
+  // Garantizar atomicidad comprobando el estado en la misma consulta de actualización
+  const updated = await prisma.booking.updateMany({
+    where: {
+      id,
+      status: { in: ['PENDING', 'CONFIRMED'] }
+    },
+    data: { status: 'CANCELLED' }
+  });
+
+  if (updated.count === 0) {
+    return { success: false, error: 'Este turno ya no puede cancelarse o acaba de cambiar de estado. Actualizá la página.' };
+  }
+
+  // Enviar notificación después de cancelar la reserva
+  try {
+    await sendBookingCancelledEmail(id);
+  } catch (e) {
+    console.error('Error no bloqueante al despachar notificación de cancelación:', e);
+  }
+
+  return { success: true };
+}
+
 export async function cancelBooking(id: string) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.businessId) return { success: false, error: 'No autorizado' };
@@ -196,29 +220,16 @@ export async function cancelBooking(id: string) {
   }
 
   try {
-    const booking = await prisma.booking.findUnique({ where: { id }, select: { businessId: true, status: true } });
+    const booking = await prisma.booking.findUnique({ where: { id }, select: { businessId: true } });
     if (!booking || booking.businessId !== session.user.businessId) {
       return { success: false, error: 'Turno no encontrado' };
     }
 
-    if (!canTransition(booking.status, 'CANCELLED')) {
-      return { success: false, error: 'El turno no puede cambiar a este estado desde su estado actual.' };
+    const res = await internalCancelBooking(id);
+    if (res.success) {
+      revalidatePath('/dashboard/turnos');
     }
-
-    await prisma.booking.update({
-      where: { id },
-      data: { status: 'CANCELLED' }
-    });
-
-    // Enviar notificación después de cancelar la reserva
-    try {
-      await sendBookingCancelledEmail(id);
-    } catch (e) {
-      console.error('Error no bloqueante al despachar notificación de cancelación:', e);
-    }
-
-    revalidatePath('/dashboard/turnos');
-    return { success: true };
+    return res;
   } catch (error) {
     console.error('Error cancelling booking:', error);
     return { success: false, error: 'Error al cancelar' };
