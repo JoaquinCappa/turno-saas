@@ -1,12 +1,11 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import DashboardHeader from '../DashboardHeader';
 import ClientesClient from './ClientesClient';
 import { Customer } from '@prisma/client';
 
 export default async function ClientesPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   let customers: Customer[] = [];
   let businessName = '';

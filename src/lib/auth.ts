@@ -82,3 +82,38 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.AUTH_SECRET,
 };
+
+import { getServerSession } from 'next-auth';
+
+export async function getAuthenticatedContext() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id || !session?.user?.businessId) {
+    return null;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { business: true }
+  });
+
+  if (
+    !user ||
+    !user.isActive ||
+    user.businessId !== session.user.businessId ||
+    !user.business ||
+    !user.business.isActive
+  ) {
+    return null;
+  }
+
+  return {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      businessId: user.businessId,
+      role: user.role,
+    }
+  };
+}

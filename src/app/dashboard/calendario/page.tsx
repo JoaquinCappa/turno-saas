@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import DashboardHeader from '../DashboardHeader';
 import CalendarioClient from './CalendarioClient';
@@ -7,7 +6,7 @@ import { getBusinessDayBounds, getBusinessWeekBounds, formatBusinessDate } from 
 import { Prisma } from '@prisma/client';
 
 export default async function CalendarioPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | undefined }> }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
   
   if (!session?.user?.businessId) {
     return <div>No autorizado</div>;

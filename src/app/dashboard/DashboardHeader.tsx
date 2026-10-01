@@ -1,9 +1,8 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import LogoutButton from './LogoutButton';
 
 export default async function DashboardHeader({ title }: { title: string }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
   const userName = session?.user?.name || 'Usuario';
   const userRole = session?.user?.role || 'STAFF';
 

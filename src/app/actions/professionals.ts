@@ -1,12 +1,11 @@
 'use server';
 
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 export async function createProfessional(data: { name: string; email?: string; phone?: string; isActive?: boolean }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };
@@ -48,7 +47,7 @@ export async function createProfessional(data: { name: string; email?: string; p
 }
 
 export async function updateProfessional(id: string, data: { name: string; email?: string; phone?: string }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };
@@ -98,7 +97,7 @@ export async function updateProfessional(id: string, data: { name: string; email
 }
 
 export async function toggleProfessionalStatus(id: string, isActive: boolean) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };

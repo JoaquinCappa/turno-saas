@@ -1,7 +1,6 @@
 'use server';
 
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createBusinessDate, getBusinessDayAndMinute, calculateEndAt } from '@/lib/date-utils';
@@ -177,7 +176,7 @@ export async function createBooking(data: {
   localTime: string; // "HH:mm"
   notes?: string;
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };
@@ -222,7 +221,7 @@ export async function internalCancelBooking(id: string) {
 }
 
 export async function cancelBooking(id: string) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
   if (!session?.user?.businessId) return { success: false, error: 'No autorizado' };
 
   if (session.user.role === 'STAFF') {
@@ -247,7 +246,7 @@ export async function cancelBooking(id: string) {
 }
 
 export async function completeBooking(id: string) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
   if (!session?.user?.businessId) return { success: false, error: 'No autorizado' };
 
   if (session.user.role === 'STAFF') {
@@ -278,7 +277,7 @@ export async function completeBooking(id: string) {
 }
 
 export async function confirmBooking(id: string) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
   if (!session?.user?.businessId) return { success: false, error: 'No autorizado' };
 
   if (session.user.role === 'STAFF') {
@@ -309,7 +308,7 @@ export async function confirmBooking(id: string) {
 }
 
 export async function noShowBooking(id: string) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
   if (!session?.user?.businessId) return { success: false, error: 'No autorizado' };
 
   if (session.user.role === 'STAFF') {

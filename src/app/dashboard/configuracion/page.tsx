@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import DashboardHeader from '../DashboardHeader';
 import HorariosClient from './HorariosClient';
@@ -7,7 +6,7 @@ import BusinessClient from './BusinessClient';
 import BloqueosClient from './BloqueosClient';
 
 export default async function ConfiguracionPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
   
   if (!session?.user?.businessId) {
     return <div>No autorizado</div>;

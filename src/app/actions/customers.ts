@@ -1,12 +1,11 @@
 'use server';
 
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 export async function createCustomer(data: { name: string; email?: string; phone?: string; notes?: string; isActive?: boolean }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };
@@ -53,7 +52,7 @@ export async function createCustomer(data: { name: string; email?: string; phone
 }
 
 export async function updateCustomer(id: string, data: { name: string; email?: string; phone?: string; notes?: string }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };
@@ -108,7 +107,7 @@ export async function updateCustomer(id: string, data: { name: string; email?: s
 }
 
 export async function toggleCustomerStatus(id: string, isActive: boolean) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };

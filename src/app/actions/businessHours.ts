@@ -1,13 +1,12 @@
 'use server';
 
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { DayOfWeek } from '@prisma/client';
 
 export async function createBusinessHour(data: { dayOfWeek: DayOfWeek; startMinute: number; endMinute: number }) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };
@@ -63,7 +62,7 @@ export async function createBusinessHour(data: { dayOfWeek: DayOfWeek; startMinu
 }
 
 export async function deleteBusinessHour(id: string) {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   if (!session?.user?.businessId) {
     return { success: false, error: 'No autorizado' };

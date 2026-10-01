@@ -1,12 +1,11 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import DashboardHeader from '../DashboardHeader';
 import ServiciosClient from './ServiciosClient';
 import { Service as PrismaService } from '@prisma/client';
 
 export default async function ServiciosPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
 
   let services: (Omit<PrismaService, 'price'> & { price: number })[] = [];
   if (session?.user?.businessId) {

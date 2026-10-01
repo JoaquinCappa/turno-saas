@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import DashboardHeader from './DashboardHeader';
 import WhatsAppAction from '@/components/dashboard/WhatsAppAction';
@@ -7,7 +6,7 @@ import Link from 'next/link';
 import { getBusinessDayBounds, formatBusinessDate } from '@/lib/date-utils';
 
 export default async function DashboardResumenPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAuthenticatedContext();
   
   if (!session?.user?.businessId) {
     return <div>No autorizado</div>;
