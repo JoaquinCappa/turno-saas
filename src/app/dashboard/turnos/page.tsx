@@ -119,6 +119,7 @@ export default async function TurnosPage({ searchParams }: { searchParams: Promi
             currentPage={page}
             totalItems={total}
             pageSize={pageSize}
+            userRole={session.user.role}
             filters={{
               status: statusFilter,
               prof: profFilter,

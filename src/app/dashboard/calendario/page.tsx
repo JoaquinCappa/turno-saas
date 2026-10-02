@@ -88,6 +88,7 @@ export default async function CalendarioPage({ searchParams }: { searchParams: P
             currentDate={targetDate}
             currentView={view}
             currentProf={professionalId}
+            userRole={session.user.role}
           />
         </div>
       </div>

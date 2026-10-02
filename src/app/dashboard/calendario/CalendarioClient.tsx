@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatBusinessDate, getBusinessDayAndMinute } from '@/lib/date-utils';
 import Modal from '@/components/dashboard/Modal';
 import StatusBadge from '@/components/dashboard/StatusBadge';
-import { cancelBooking, completeBooking } from '@/app/actions/bookings';
+import { cancelBooking, completeBooking, confirmBooking, noShowBooking } from '@/app/actions/bookings';
 import { addDays, parseISO, format } from 'date-fns';
 
 type Booking = {
@@ -27,7 +27,8 @@ export default function CalendarioClient({
   businessTimezone,
   currentDate,
   currentView,
-  currentProf
+  currentProf,
+  userRole
 }: {
   initialBookings: (Omit<Booking, 'startAt' | 'endAt'> & { startAt: string | Date; endAt: string | Date })[];
   professionals: { id: string; name: string }[];
@@ -35,9 +36,10 @@ export default function CalendarioClient({
   currentDate: string; // YYYY-MM-DD
   currentView: 'Día' | 'Semana';
   currentProf: string;
+  userRole: string;
 }) {
   const router = useRouter();
-  
+
   // Make sure Date objects
   const bookings: Booking[] = initialBookings.map(b => ({
     ...b,
@@ -80,7 +82,7 @@ export default function CalendarioClient({
   const calculateEventPositions = (events: Booking[]) => {
     const sorted = [...events].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
     const columns: Booking[][] = [];
-    
+
     sorted.forEach(event => {
       let placed = false;
       for (let i = 0; i < columns.length; i++) {
@@ -112,10 +114,10 @@ export default function CalendarioClient({
     // Si currentDate es Miércoles, necesitamos encontrar el Lunes
     const parsed = parseISO(currentDate);
     // getDay en JS: 0 Domingo, 1 Lunes.
-    const dayOfWeek = parsed.getDay(); 
+    const dayOfWeek = parsed.getDay();
     const jsToIso = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const monday = addDays(parsed, -jsToIso);
-    
+
     return Array.from({ length: 7 }, (_, i) => {
       const d = addDays(monday, i);
       const dateStr = format(d, 'yyyy-MM-dd');
@@ -146,7 +148,7 @@ export default function CalendarioClient({
     const { event: ev, colIndex, totalCols } = t;
     const { minuteOfDay } = getBusinessDayAndMinute(ev.startAt, businessTimezone);
     const startMins = minuteOfDay - START_HOUR * 60;
-    
+
     // Ocultar si está antes de la hora de inicio de visualización
     if (startMins < 0 && startMins + ev.serviceDuration <= 0) return null;
 
@@ -154,22 +156,22 @@ export default function CalendarioClient({
     const height = ev.serviceDuration * PIXELS_PER_MINUTE;
     const width = 100 / totalCols;
     const left = colIndex * width;
-    
+
     // Estilos por estado
     const isCancelled = ev.status === 'CANCELLED' || ev.status === 'NO_SHOW';
     const isPending = ev.status === 'PENDING';
-    
+
     let borderClass = 'border-green-500';
     if (isPending) borderClass = 'border-yellow-500';
     if (isCancelled) borderClass = 'border-gray-500 opacity-60';
 
     return (
-      <div 
-        key={ev.id} 
+      <div
+        key={ev.id}
         className="absolute p-0.5"
         style={{ top: `${top}px`, height: `${height}px`, left: `${left}%`, width: `${width}%` }}
       >
-        <div 
+        <div
           onClick={() => setSelectedBooking(ev)}
           className={`w-full h-full rounded-md bg-[#18181A] border border-gray-800/80 border-l-2 ${borderClass} p-1 sm:p-2 overflow-hidden shadow-sm hover:bg-[#202023] transition-colors cursor-pointer group flex flex-col`}
         >
@@ -183,18 +185,20 @@ export default function CalendarioClient({
     );
   };
 
-  const handleAction = async (action: 'cancel' | 'complete') => {
+  const handleAction = async (action: 'cancel' | 'complete' | 'confirm' | 'noshow') => {
     if (!selectedBooking) return;
     setIsActioning(true);
     let res;
     if (action === 'cancel') res = await cancelBooking(selectedBooking.id);
-    else res = await completeBooking(selectedBooking.id);
-    
+    else if (action === 'complete') res = await completeBooking(selectedBooking.id);
+    else if (action === 'confirm') res = await confirmBooking(selectedBooking.id);
+    else if (action === 'noshow') res = await noShowBooking(selectedBooking.id);
+
     setIsActioning(false);
-    if (res.success) {
+    if (res?.success) {
       setSelectedBooking(null);
     } else {
-      alert(res.error || 'Error procesando la acción');
+      alert(res?.error || 'Error procesando la acción');
     }
   };
 
@@ -212,7 +216,7 @@ export default function CalendarioClient({
 
   return (
     <div className="space-y-6">
-      
+
       {/* TOOLBAR */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
@@ -229,10 +233,10 @@ export default function CalendarioClient({
           </div>
           <span className="text-white font-semibold sm:text-lg">{getHeaderTitle()}</span>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-          <select 
-            value={currentProf} 
+          <select
+            value={currentProf}
             onChange={e => pushUrl(currentDate, currentView, e.target.value)}
             className="w-full sm:w-auto bg-[#111113] border border-gray-800 text-white text-sm rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500"
           >
@@ -258,7 +262,7 @@ export default function CalendarioClient({
 
       {/* CALENDAR VIEW */}
       <div className="bg-[#111113] border border-gray-800 rounded-xl flex flex-col shadow-sm overflow-hidden">
-        
+
         {/* HEADER */}
         {currentView === 'Día' ? (
           <div className="grid grid-cols-[50px_1fr] sm:grid-cols-[60px_1fr] border-b border-gray-800 bg-[#151517]">
@@ -286,7 +290,7 @@ export default function CalendarioClient({
         {/* BODY */}
         <div className="overflow-x-auto overflow-y-auto max-h-[70vh] bg-[#111113]">
           <div className={`grid grid-cols-[50px_1fr] sm:grid-cols-[60px_1fr] relative ${currentView === 'Semana' ? 'min-w-[600px]' : ''}`}>
-            
+
             {/* Background Grid */}
             <div className="col-start-2 absolute inset-0 pointer-events-none flex flex-col">
               {hours.map(h => (
@@ -308,7 +312,7 @@ export default function CalendarioClient({
             {/* Events Area */}
             {currentView === 'Día' ? (
               <div className="relative z-10 w-full bg-transparent">
-                {/* 
+                {/*
                   En la vista día mostramos los del dayIndex correspondiente.
                   Como recibimos eventos filtrados, y el query de DB trajo solo los del día consultado,
                   todos pertenecen a la vista actual.
@@ -324,7 +328,7 @@ export default function CalendarioClient({
                 ))}
               </div>
             )}
-            
+
           </div>
         </div>
       </div>
@@ -340,7 +344,7 @@ export default function CalendarioClient({
               </div>
               <StatusBadge status={selectedBooking.status === 'CONFIRMED' ? 'Confirmado' : selectedBooking.status === 'PENDING' ? 'Pendiente' : selectedBooking.status === 'CANCELLED' ? 'Cancelado' : selectedBooking.status === 'NO_SHOW' ? 'Ausente' : 'Completado'} />
             </div>
-            
+
             <div className="bg-[#1A1A1C] border border-gray-800 rounded-lg p-4 space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-400">Servicio</span>
@@ -373,29 +377,47 @@ export default function CalendarioClient({
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
-              <button 
-                onClick={() => setSelectedBooking(null)} 
+            <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-gray-800">
+              <button
+                onClick={() => setSelectedBooking(null)}
                 disabled={isActioning}
                 className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
               >
                 Cerrar
               </button>
-              {(selectedBooking.status === 'CONFIRMED' || selectedBooking.status === 'PENDING') && (
+              {userRole !== 'STAFF' && selectedBooking.status === 'PENDING' && (
+                <button
+                  onClick={() => handleAction('confirm')}
+                  disabled={isActioning}
+                  className="px-4 py-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                >
+                  Confirmar Turno
+                </button>
+              )}
+              {userRole !== 'STAFF' && selectedBooking.status === 'CONFIRMED' && (
+                <button
+                  onClick={() => handleAction('complete')}
+                  disabled={isActioning}
+                  className="px-4 py-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                >
+                  Completar Turno
+                </button>
+              )}
+              {userRole !== 'STAFF' && (selectedBooking.status === 'CONFIRMED' || selectedBooking.status === 'PENDING') && (
                 <>
-                  <button 
+                  <button
+                    onClick={() => handleAction('noshow')}
+                    disabled={isActioning}
+                    className="px-4 py-2 bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                  >
+                    Ausente
+                  </button>
+                  <button
                     onClick={() => handleAction('cancel')}
                     disabled={isActioning}
                     className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
                   >
                     Cancelar Turno
-                  </button>
-                  <button 
-                    onClick={() => handleAction('complete')}
-                    disabled={isActioning}
-                    className="px-4 py-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
-                  >
-                    Completar Turno
                   </button>
                 </>
               )}

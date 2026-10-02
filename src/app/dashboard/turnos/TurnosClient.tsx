@@ -29,7 +29,8 @@ export default function TurnosClient({
   currentPage,
   totalItems,
   pageSize,
-  filters
+  filters,
+  userRole
 }: {
   initialBookings: (Omit<BookingItem, 'startAt' | 'endAt'> & { startAt: string | Date; endAt: string | Date })[];
   customers: { id: string; name: string; phone: string | null }[];
@@ -40,6 +41,7 @@ export default function TurnosClient({
   totalItems: number;
   pageSize: number;
   filters: { status: string; prof: string; service: string; date: string; q: string };
+  userRole: string;
 }) {
   const router = useRouter();
 
@@ -232,19 +234,19 @@ export default function TurnosClient({
                         <StatusBadge status={b.status === 'CONFIRMED' ? 'Confirmado' : b.status === 'PENDING' ? 'Pendiente' : b.status === 'COMPLETED' ? 'Completado' : b.status === 'CANCELLED' ? 'Cancelado' : 'Ausente'} />
                       </td>
                       <td className="px-6 py-4 text-right flex justify-end gap-2">
-                        {isPending && (
-                          <button onClick={() => executeAction('confirm', b.id)} disabled={isActioning} className="p-1.5 text-green-500 hover:bg-green-500/10 rounded-md transition-colors" title="Confirmar">
+                        {userRole !== 'STAFF' && isPending && (
+                            <button onClick={() => executeAction('confirm', b.id)} disabled={isActioning} className="p-1.5 text-green-500 hover:bg-green-500/10 rounded-md transition-colors" title="Confirmar">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                           </button>
                         )}
-                        {isConfirmed && (
-                          <button onClick={() => executeAction('complete', b.id)} disabled={isActioning} className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors" title="Completar">
+                        {userRole !== 'STAFF' && isConfirmed && (
+                            <button onClick={() => executeAction('complete', b.id)} disabled={isActioning} className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors" title="Completar">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
                           </button>
                         )}
-                        {(isPending || isConfirmed) && (
-                          <>
-                            <button onClick={() => executeAction('cancel', b.id)} disabled={isActioning} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-colors" title="Cancelar">
+                        {userRole !== 'STAFF' && (isPending || isConfirmed) && (
+                            <>
+                              <button onClick={() => executeAction('cancel', b.id)} disabled={isActioning} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-colors" title="Cancelar">
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                             <button onClick={() => executeAction('noshow', b.id)} disabled={isActioning} className="p-1.5 text-orange-500 hover:bg-orange-500/10 rounded-md transition-colors" title="No asistió">
@@ -388,17 +390,17 @@ export default function TurnosClient({
               <button onClick={() => setSelectedBooking(null)} disabled={isActioning} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">
                 Cerrar
               </button>
-              {selectedBooking.status === 'PENDING' && (
-                <button onClick={() => executeAction('confirm', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+              {userRole !== 'STAFF' && selectedBooking.status === 'PENDING' && (
+                  <button onClick={() => executeAction('confirm', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
                   Confirmar
                 </button>
               )}
-              {selectedBooking.status === 'CONFIRMED' && (
-                <button onClick={() => executeAction('complete', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+              {userRole !== 'STAFF' && selectedBooking.status === 'CONFIRMED' && (
+                  <button onClick={() => executeAction('complete', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
                   Completar
                 </button>
               )}
-              {(selectedBooking.status === 'PENDING' || selectedBooking.status === 'CONFIRMED') && (
+              {userRole !== 'STAFF' && (selectedBooking.status === 'PENDING' || selectedBooking.status === 'CONFIRMED') && (
                 <>
                   <button onClick={() => executeAction('noshow', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
                     Ausente
