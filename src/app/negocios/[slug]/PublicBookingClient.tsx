@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { getAvailableTimes, createPublicBooking } from '@/app/actions/publicBooking';
@@ -60,6 +60,7 @@ export default function PublicBookingClient({
   });
 
   useEffect(() => {
+    if (step !== 2) return;
     let active = true;
     if (serviceId && professionalId && localDate) {
       setTimeout(() => {
@@ -68,9 +69,14 @@ export default function PublicBookingClient({
           setLocalTime('');
         }
       }, 0);
-      getAvailableTimes(business.id, serviceId, professionalId, localDate).then(times => {
+      getAvailableTimes(business.id, serviceId, professionalId, localDate, undefined, customerEmail).then(res => {
         if (!active) return;
-        setAvailableTimes(times);
+        if ('hasBookingThatDay' in res && res.hasBookingThatDay) {
+          setExistingBookingInfo(res.existingBooking as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+          setStep(3);
+          return;
+        }
+        setAvailableTimes(res.availableTimes || []);
         setIsLoadingTimes(false);
       });
     } else {
@@ -79,7 +85,7 @@ export default function PublicBookingClient({
       }, 0);
     }
     return () => { active = false; };
-  }, [serviceId, professionalId, localDate, business.id]);
+  }, [serviceId, professionalId, localDate, business.id, customerEmail, step]);
 
   if (success) {
     const srv = services.find(s => s.id === serviceId);
@@ -147,16 +153,10 @@ export default function PublicBookingClient({
         setExistingBookingInfo(res.existingBooking);
       } else
       if ((res as { error?: string }).error === 'El profesional ya tiene un turno en ese horario') {
-        setError('Este horario acaba de ser reservado. Elegí otro horario.');
-        setStep(2); // Go back to time selection
-        // Refresh available times
-        setIsLoadingTimes(true);
-        getAvailableTimes(business.id, serviceId, professionalId, localDate).then(times => {
-          setAvailableTimes(times);
-          setIsLoadingTimes(false);
+          setError('Este horario acaba de ser reservado. Elegí otro horario.');
+          setStep(2); // Go back to time selection
           setLocalTime('');
-        });
-      } else {
+        } else {
         setError((res as { error?: string }).error || 'Error al procesar la reserva');
       }
     }

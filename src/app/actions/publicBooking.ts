@@ -47,12 +47,13 @@ export async function getAvailableTimes(
   serviceId: string,
   professionalId: string,
   localDate: string,
-  excludeBookingId?: string
+  excludeBookingId?: string,
+  customerEmail?: string
 ) {
   const business = await prisma.business.findUnique({ where: { id: businessId }, select: { timezone: true, isActive: true } });
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
 
-  if (!business || !business.isActive || !service) return [];
+  if (!business || !business.isActive || !service) return { success: true, hasBookingThatDay: false, availableTimes: [] };
 
   // Assuming localDate is "YYYY-MM-DD"
   // Create a UTC date at local midnight to find DayOfWeek
@@ -83,6 +84,41 @@ export async function getAvailableTimes(
       id: excludeBookingId ? { not: excludeBookingId } : undefined
     }
   });
+
+  let existingBookingByEmail = null;
+  if (customerEmail) {
+    const normalizedEmail = customerEmail.trim().toLowerCase();
+    const startOfDayUTC = fromZonedTime(`${localDate}T00:00:00`, business.timezone);
+    const endOfDayUTC = fromZonedTime(`${localDate}T23:59:59.999`, business.timezone);
+
+    existingBookingByEmail = await prisma.booking.findFirst({
+      where: {
+        businessId,
+        customer: { email: normalizedEmail },
+        startAt: { gte: startOfDayUTC, lte: endOfDayUTC },
+        status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW'] },
+        id: excludeBookingId ? { not: excludeBookingId } : undefined
+      },
+      include: {
+        service: { select: { name: true } },
+        professional: { select: { name: true } }
+      }
+    });
+
+    if (existingBookingByEmail) {
+      return {
+        success: true,
+        hasBookingThatDay: true,
+        availableTimes: [],
+        existingBooking: {
+          startAt: existingBookingByEmail.startAt,
+          endAt: existingBookingByEmail.endAt,
+          serviceName: existingBookingByEmail.service.name,
+          professionalName: existingBookingByEmail.professional.name
+        }
+      };
+    }
+  }
 
   const availableTimes: string[] = [];
   const now = new Date();
@@ -120,7 +156,11 @@ export async function getAvailableTimes(
   }
 
   // Remove duplicates and sort
-  return Array.from(new Set(availableTimes)).sort();
+  return {
+    success: true,
+    hasBookingThatDay: false,
+    availableTimes: Array.from(new Set(availableTimes)).sort()
+  };
 }
 
 export async function createPublicBooking(data: {
@@ -249,18 +289,18 @@ export async function cancelPublicBooking(token: string) {
 }
 
 export async function getAvailableTimesForReschedule(token: string, localDate: string) {
-  if (!token || typeof token !== 'string') return [];
+  if (!token || typeof token !== 'string') return { availableTimes: [] };
   const managementTokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
   const booking = await prisma.booking.findUnique({
     where: { managementTokenHash },
-    select: { id: true, businessId: true, serviceId: true, professionalId: true, status: true }
+    select: { id: true, businessId: true, serviceId: true, professionalId: true, status: true, customer: { select: { email: true } } }
   });
 
-  if (!booking) return [];
-  if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') return [];
+  if (!booking) return { availableTimes: [] };
+  if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') return { availableTimes: [] };
 
-  return getAvailableTimes(booking.businessId, booking.serviceId, booking.professionalId, localDate, booking.id);
+  return getAvailableTimes(booking.businessId, booking.serviceId, booking.professionalId, localDate, booking.id, booking.customer?.email ?? undefined);
 }
 
 import {
@@ -282,7 +322,7 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
           where: { managementTokenHash },
           include: { business: true, customer: true, service: true, professional: true }
         });
-  
+
         if (!booking) throw new Error('El enlace de gestin no es vǭlido.');
         if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
           throw new Error('Este turno ya no puede reprogramarse.');
@@ -291,14 +331,14 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
         if (!booking.business.isActive) throw new Error('Negocio invǭlido o inactivo.');
         if (!booking.service.isActive) throw new Error('Servicio invǭlido o inactivo.');
         if (!booking.professional.isActive) throw new Error('Profesional invǭlido o inactivo.');
-  
+
         if (!booking.customer?.email) throw new Error('Cliente sin email.');
         const normalizedEmail = booking.customer.email.trim().toLowerCase();
         const lockStr = `limit-${booking.businessId}-${normalizedEmail}-${localDate}`;
         await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1));', lockStr);
 
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.professionalId}));`;
-  
+
         const startAt = createBusinessDate(localDate, localTime, booking.business.timezone);
         const endAt = calculateEndAt(startAt, booking.serviceDuration);
         const now = new Date();
@@ -336,15 +376,15 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
         if (!isWithinHours) {
           throw new Error('El horario seleccionado estǭ fuera del horario de atencin.');
         }
-  
+
         const exactDate = new Date(`${localDate}T00:00:00Z`);
         const blocks = await tx.blockedTime.findMany({
           where: { businessId: booking.businessId, date: exactDate }
         });
-        
+
         const isBlocked = blocks.some(b => Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute));
         if (isBlocked) throw new Error('El horario estǭ bloqueado excepcionalmente.');
-  
+
         const overlaps = await tx.booking.findMany({
           where: {
             businessId: booking.businessId,
@@ -355,11 +395,11 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
             endAt: { gt: startAt }
           }
         });
-  
+
         if (overlaps.length > 0) {
           throw new Error('Este horario acaba de ser ocupado. Eleg otro.');
         }
-  
+
         const updated = await tx.booking.updateMany({
         where: {
           id: booking.id,

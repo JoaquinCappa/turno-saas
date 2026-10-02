@@ -36,8 +36,13 @@ export default function PublicRescheduleButton({ token, initialDate }: PublicRes
     if (date) {
       setIsLoadingTimes(true);
       try {
-        const times = await getAvailableTimesForReschedule(token, date);
-        setAvailableTimes(times);
+        const res = await getAvailableTimesForReschedule(token, date);
+        if ('hasBookingThatDay' in res && res.hasBookingThatDay) {
+          setError('Ya tenés un turno para ese día. Solo permitimos un turno por cliente por día.');
+          setAvailableTimes([]);
+        } else {
+          setAvailableTimes(res.availableTimes || []);
+        }
       } catch {
         setError('No se pudieron cargar los horarios.');
       } finally {
