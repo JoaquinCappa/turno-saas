@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { getAvailableTimes, createPublicBooking } from '@/app/actions/publicBooking';
@@ -12,7 +12,7 @@ function getNextDays(startDateStr: string, days: number) {
   // Parse startDateStr (YYYY-MM-DD) as local time safely by splitting
   const [y, m, d] = startDateStr.split('-').map(Number);
   const start = new Date(y, m - 1, d);
-  
+
   for (let i = 0; i < days; i++) {
     const current = new Date(start);
     current.setDate(start.getDate() + i);
@@ -33,22 +33,23 @@ export default function PublicBookingClient({
   initialDate: string;
 }) {
   const [step, setStep] = useState(1);
-  
+
   const [serviceId, setServiceId] = useState('');
   // Auto-select if there is only one professional
   const [professionalId, setProfessionalId] = useState(professionals.length === 1 ? professionals[0].id : '');
-  
+
   const [localDate, setLocalDate] = useState(() => initialDate);
   const [localTime, setLocalTime] = useState('');
-  
+
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [existingBookingInfo, setExistingBookingInfo] = useState<{ startAt: string, endAt: string, serviceName: string, professionalName: string } | null>(null);
 
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [isLoadingTimes, setIsLoadingTimes] = useState(false);
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -57,7 +58,7 @@ export default function PublicBookingClient({
   const [dateOptions] = useState<Date[]>(() => {
     return getNextDays(initialDate, 14);
   });
-  
+
   useEffect(() => {
     let active = true;
     if (serviceId && professionalId && localDate) {
@@ -83,27 +84,27 @@ export default function PublicBookingClient({
   if (success) {
     const srv = services.find(s => s.id === serviceId);
     const prof = professionals.find(p => p.id === professionalId);
-    
+
     return (
       <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-10 text-center text-gray-900">
         <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
         </div>
-        <h2 className="text-3xl font-extrabold mb-2">¡Reserva confirmada!</h2>
+        <h2 className="text-3xl font-extrabold mb-2">Â¡Reserva confirmada!</h2>
         <p className="text-gray-500 mb-8">Te esperamos, {customerName.split(' ')[0]}.</p>
-        
+
         <div className="bg-gray-50 rounded-xl p-6 text-left space-y-4 mb-8">
           <div>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cuándo</div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">CuÃ¡ndo</div>
             <div className="font-medium">{localDate} a las {localTime} ({business.timezone})</div>
           </div>
           <div className="border-t border-gray-200 pt-4">
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Qué</div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">QuÃ©</div>
             <div className="font-medium">{srv?.name} con {prof?.name}</div>
-            <div className="text-sm text-gray-500">{srv?.duration} min • ${srv?.price.toString()}</div>
+            <div className="text-sm text-gray-500">{srv?.duration} min â€¢ ${srv?.price.toString()}</div>
           </div>
           <div className="border-t border-gray-200 pt-4">
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Dónde</div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">DÃ³nde</div>
             <div className="font-medium">{business.name}</div>
           </div>
         </div>
@@ -121,10 +122,10 @@ export default function PublicBookingClient({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName || !customerEmail) return setError('Nombre y email son obligatorios');
-    
+
     setError('');
     setIsSubmitting(true);
-    
+
     const res = await createPublicBooking({
       slug: business.slug,
       serviceId,
@@ -142,8 +143,8 @@ export default function PublicBookingClient({
     if (res.success) {
       setSuccess(true);
     } else {
-      if (res.error === 'El profesional ya tiene un turno en ese horario') {
-        setError('Este horario acaba de ser reservado. Elegí otro horario.');
+      if ((res as { error?: string }).error === 'El profesional ya tiene un turno en ese horario') {
+        setError('Este horario acaba de ser reservado. ElegÃ­ otro horario.');
         setStep(2); // Go back to time selection
         // Refresh available times
         setIsLoadingTimes(true);
@@ -153,7 +154,7 @@ export default function PublicBookingClient({
           setLocalTime('');
         });
       } else {
-        setError(res.error || 'Error al procesar la reserva');
+        setError((res as { error?: string }).error || 'Error al procesar la reserva');
       }
     }
   };
@@ -166,7 +167,7 @@ export default function PublicBookingClient({
 
   return (
     <div className="bg-white border border-gray-100 shadow-xl shadow-gray-200/40 rounded-3xl overflow-hidden">
-      
+
       {/* Header progress */}
       <div className="bg-gray-50/80 px-6 py-5 border-b border-gray-100 flex items-center justify-between sm:justify-start sm:gap-4 text-sm">
         {steps.map((s, idx) => (
@@ -177,7 +178,7 @@ export default function PublicBookingClient({
             <span className={`hidden sm:inline font-medium ${step >= s.num ? 'text-gray-900' : 'text-gray-400'}`}>
               {s.label}
             </span>
-            {idx < steps.length - 1 && <span className="text-gray-300 hidden sm:inline ml-2">›</span>}
+            {idx < steps.length - 1 && <span className="text-gray-300 hidden sm:inline ml-2">â€º</span>}
           </div>
         ))}
       </div>
@@ -193,7 +194,7 @@ export default function PublicBookingClient({
         {step === 1 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">¿Qué servicio buscás?</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Â¿QuÃ© servicio buscÃ¡s?</h3>
               <div className="grid gap-3">
                 {services.map(s => (
                   <div key={s.id} onClick={() => setServiceId(s.id)} className={`flex items-center justify-between p-5 border-2 rounded-2xl cursor-pointer transition-all ${serviceId === s.id ? 'border-gray-900 bg-gray-50' : 'border-gray-100 hover:border-gray-300'}`}>
@@ -217,7 +218,7 @@ export default function PublicBookingClient({
 
             {professionals.length > 1 && (
               <div className="pt-4 border-t border-gray-100">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">Elegí el profesional</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">ElegÃ­ el profesional</h3>
                 <div className="grid gap-3">
                   {professionals.map(p => (
                     <div key={p.id} onClick={() => setProfessionalId(p.id)} className={`flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all ${professionalId === p.id ? 'border-gray-900 bg-gray-50' : 'border-gray-100 hover:border-gray-300'}`}>
@@ -232,8 +233,8 @@ export default function PublicBookingClient({
             )}
 
             <div className="flex justify-end pt-6">
-              <button 
-                onClick={handleNext} 
+              <button
+                onClick={handleNext}
                 disabled={!serviceId || !professionalId}
                 className="px-8 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:hover:bg-gray-900 transition-all active:scale-[0.98]"
               >
@@ -246,8 +247,8 @@ export default function PublicBookingClient({
         {step === 2 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">¿Cuándo querés venir?</h3>
-              
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Â¿CuÃ¡ndo querÃ©s venir?</h3>
+
               {/* Horizontal Date Picker */}
               <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2 snap-x">
                 {dateOptions.map(date => {
@@ -259,7 +260,7 @@ export default function PublicBookingClient({
                   const dayName = date.toLocaleDateString('es-ES', { weekday: 'short' });
                   const dayNum = date.getDate();
                   const monthName = date.toLocaleDateString('es-ES', { month: 'short' });
-                  
+
                   return (
                     <button
                       key={dateStr}
@@ -274,7 +275,7 @@ export default function PublicBookingClient({
                 })}
                 <div className="snap-start flex-shrink-0 flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300 hover:text-gray-700 cursor-pointer relative overflow-hidden">
                   <span className="text-xs font-semibold px-2 text-center">Otra fecha</span>
-                  <input 
+                  <input
                     type="date"
                     min={initialDate}
                     value={localDate}
@@ -304,7 +305,7 @@ export default function PublicBookingClient({
                       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </div>
                     <h4 className="text-gray-900 font-medium mb-1">Sin horarios</h4>
-                    <p className="text-gray-500 text-sm">No encontramos turnos para este día. Por favor, elegí otra fecha.</p>
+                    <p className="text-gray-500 text-sm">No encontramos turnos para este dÃ­a. Por favor, elegÃ­ otra fecha.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
@@ -324,8 +325,8 @@ export default function PublicBookingClient({
 
             <div className="flex justify-between pt-6 border-t border-gray-100">
               <button onClick={handleBack} className="px-6 py-3 text-gray-500 font-medium hover:text-gray-900 transition-colors">Volver</button>
-              <button 
-                onClick={handleNext} 
+              <button
+                onClick={handleNext}
                 disabled={!localDate || !localTime}
                 className="px-8 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:hover:bg-gray-900 transition-all active:scale-[0.98]"
               >
@@ -335,58 +336,88 @@ export default function PublicBookingClient({
           </div>
         )}
 
-        {step === 3 && (
+        {step === 3 && existingBookingInfo && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center animate-in fade-in zoom-in duration-300">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h4 className="text-red-900 font-bold mb-2">Ya tenÃ©s un turno para ese dÃ­a.</h4>
+            <div className="bg-white p-4 rounded-xl border border-red-100 mb-4 inline-block text-left shadow-sm">
+              <div className="font-medium text-gray-900">
+                {new Date(existingBookingInfo.startAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} Â· {new Date(existingBookingInfo.startAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}â€“{new Date(existingBookingInfo.endAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="text-gray-600 text-sm mt-1">
+                {existingBookingInfo.serviceName} Â· {existingBookingInfo.professionalName}
+              </div>
+            </div>
+            <p className="text-red-700 text-sm mb-6">Solo permitimos un turno por cliente por dÃ­a.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setExistingBookingInfo(null);
+                setStep(2);
+              }}
+              className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Elegir otra fecha
+            </button>
+          </div>
+        )}
+
+        {step === 3 && !existingBookingInfo && (
           <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div>
               <h3 className="text-xl font-bold text-gray-900 mb-6">Tus datos</h3>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Nombre completo *</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={customerName}
                     onChange={e => setCustomerName(e.target.value)}
                     required
-                    placeholder="Ej. Juan Pérez"
-                    className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all" 
+                    placeholder="Ej. Juan PÃ©rez"
+                    className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
                     disabled={isSubmitting}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Email *</label>
-                  <input 
-                    type="email" 
+                  <input
+                    type="email"
                     value={customerEmail}
                     onChange={e => setCustomerEmail(e.target.value)}
                     required
                     placeholder="tu@email.com"
-                    className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all" 
+                    className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
                     disabled={isSubmitting}
                   />
                 </div>
               </div>
 
               <div className="mt-5">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Teléfono (opcional)</label>
-                <input 
-                  type="tel" 
+                <label className="block text-sm font-semibold text-gray-700 mb-1">TelÃ©fono (opcional)</label>
+                <input
+                  type="tel"
                   value={customerPhone}
                   onChange={e => setCustomerPhone(e.target.value)}
-                  placeholder="Tu número de celular"
-                  className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all" 
+                  placeholder="Tu nÃºmero de celular"
+                  className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
                   disabled={isSubmitting}
                 />
               </div>
 
               <div className="mt-5">
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Notas (opcional)</label>
-                <textarea 
+                <textarea
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   rows={3}
-                  placeholder="¿Algún comentario para el profesional?"
-                  className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all resize-none" 
+                  placeholder="Â¿AlgÃºn comentario para el profesional?"
+                  className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all resize-none"
                   disabled={isSubmitting}
                 />
               </div>
@@ -410,8 +441,8 @@ export default function PublicBookingClient({
 
             <div className="flex justify-between pt-6 border-t border-gray-100">
               <button type="button" onClick={handleBack} disabled={isSubmitting} className="px-6 py-3 text-gray-500 font-medium hover:text-gray-900 transition-colors">Volver</button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={isSubmitting}
                 className="px-8 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-all flex items-center gap-2 active:scale-[0.98]"
               >

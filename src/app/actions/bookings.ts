@@ -4,7 +4,7 @@ import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createBusinessDate, getBusinessDayAndMinute, calculateEndAt } from '@/lib/date-utils';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, Prisma } from '@prisma/client';
 import {
   sendBookingCreatedEmail,
   sendBookingCancelledEmail,
@@ -31,28 +31,30 @@ export async function executeBooking(
     localDate: string;
     localTime: string;
     notes?: string;
-  }
+  },
+  txParam?: Prisma.TransactionClient
 ) {
   try {
+    const db = txParam || prisma;
     // 1. Obtener entidades y validar pertenencia y estado
-    const business = await prisma.business.findUnique({
+    const business = await db.business.findUnique({
       where: { id: businessId },
       select: { timezone: true, isActive: true }
     });
 
     if (!business || !business.isActive) return { success: false, error: 'Negocio inválido o inactivo' };
 
-    const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
+    const customer = await db.customer.findUnique({ where: { id: data.customerId } });
     if (!customer || customer.businessId !== businessId || !customer.isActive) {
       return { success: false, error: 'Cliente inválido' };
     }
 
-    const service = await prisma.service.findUnique({ where: { id: data.serviceId } });
+    const service = await db.service.findUnique({ where: { id: data.serviceId } });
     if (!service || service.businessId !== businessId || !service.isActive) {
       return { success: false, error: 'Servicio inválido' };
     }
 
-    const professional = await prisma.professional.findUnique({ where: { id: data.professionalId } });
+    const professional = await db.professional.findUnique({ where: { id: data.professionalId } });
     if (!professional || professional.businessId !== businessId || !professional.isActive) {
       return { success: false, error: 'Profesional inválido' };
     }
@@ -75,7 +77,7 @@ export async function executeBooking(
       return { success: false, error: 'El turno no puede cruzar la medianoche' };
     }
 
-    const businessHours = await prisma.businessHour.findMany({
+    const businessHours = await db.businessHour.findMany({
       where: { businessId, dayOfWeek }
     });
 
@@ -87,7 +89,7 @@ export async function executeBooking(
     // 4. Concurrencia y Solapamiento (Postgres Advisory Lock)
     // El bloqueo consultivo por profesional encola las peticiones simultáneas,
     // evitando race conditions y falsos positivos de Serializable.
-    const result = await prisma.$transaction(async (tx) => {
+    const runTransaction = async (tx: Prisma.TransactionClient) => {
 
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${data.professionalId}));`;
 
@@ -144,7 +146,9 @@ export async function executeBooking(
       });
 
       return { booking, managementToken };
-    });
+    };
+
+    const result = txParam ? await runTransaction(txParam) : await prisma.$transaction(runTransaction);
 
     // Enviar notificación después de crear la reserva.
     // Se utiliza await para asegurar su ejecución en Next.js (serverless),

@@ -1,6 +1,7 @@
-'use server';
+﻿'use server';
 
 import prisma from '@/lib/prisma';
+import { fromZonedTime } from 'date-fns-tz';
 import { getBusinessDayAndMinute, createBusinessDate, calculateEndAt } from '@/lib/date-utils';
 import { executeBooking, internalCancelBooking } from './bookings';
 import crypto from 'crypto';
@@ -135,45 +136,85 @@ export async function createPublicBooking(data: {
 }) {
   const business = await prisma.business.findUnique({
     where: { slug: data.slug },
-    select: { id: true, isActive: true }
+    select: { id: true, timezone: true, isActive: true }
   });
 
-  if (!business || !business.isActive) return { success: false, error: 'Negocio inválido o inactivo' };
+  if (!business || !business.isActive) return { success: false, error: 'Negocio invÃ¡lido o inactivo' };
 
   if (!data.customerName || !data.customerEmail) {
     return { success: false, error: 'Nombre y email son obligatorios' };
   }
 
-  // Find or create customer
-  let customer = await prisma.customer.findFirst({
-    where: { businessId: business.id, email: data.customerEmail, isActive: true }
-  });
+  const normalizedEmail = data.customerEmail.trim().toLowerCase();
 
-  if (!customer) {
-    customer = await prisma.customer.create({
-      data: {
+  // 1. Lock preventivo contra concurrencia de reservas
+  const lockStr = `limit-${business.id}-${normalizedEmail}-${data.localDate}`;
+
+  return await prisma.$transaction(async (tx) => {
+    // Tomamos un advisory lock transaccional en Postgres para el contexto de esta sesion
+    await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1));', lockStr);
+
+    // 2. Comprobar si ya existe un turno este dia (en timezone local)
+    const startOfDayUTC = fromZonedTime(`${data.localDate}T00:00:00`, business.timezone);
+    const endOfDayUTC = fromZonedTime(`${data.localDate}T23:59:59.999`, business.timezone);
+
+    const existingBooking = await tx.booking.findFirst({
+      where: {
         businessId: business.id,
-        name: data.customerName,
-        email: data.customerEmail,
-        phone: data.customerPhone,
+        customer: { email: normalizedEmail },
+        startAt: { gte: startOfDayUTC, lte: endOfDayUTC },
+        status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW'] }
+      },
+      include: {
+        professional: { select: { name: true } },
+        service: { select: { name: true } }
       }
     });
-  }
 
-  // Call the core logic
-  return await executeBooking(business.id, {
-    customerId: customer.id,
-    serviceId: data.serviceId,
-    professionalId: data.professionalId,
-    localDate: data.localDate,
-    localTime: data.localTime,
-    notes: data.notes
+    if (existingBooking) {
+      return {
+        success: false,
+        reason: 'limit_exceeded',
+        existingBooking: {
+          startAt: existingBooking.startAt.toISOString(),
+          endAt: existingBooking.endAt.toISOString(),
+          serviceName: existingBooking.serviceName || existingBooking.service?.name,
+          professionalName: existingBooking.professional?.name
+        }
+      };
+    }
+
+    // 3. Obtener o crear Customer (con email normalizado)
+    let customer = await tx.customer.findFirst({
+      where: { businessId: business.id, email: normalizedEmail, isActive: true }
+    });
+
+    if (!customer) {
+      customer = await tx.customer.create({
+        data: {
+          businessId: business.id,
+          name: data.customerName,
+          email: normalizedEmail,
+          phone: data.customerPhone,
+        }
+      });
+    }
+
+    // 4. Crear el turno delegando a executeBooking pasandole la transaccion
+    return await executeBooking(business.id, {
+      customerId: customer.id,
+      serviceId: data.serviceId,
+      professionalId: data.professionalId,
+      localDate: data.localDate,
+      localTime: data.localTime,
+      notes: data.notes
+    }, tx);
   });
 }
 
 export async function cancelPublicBooking(token: string) {
   if (!token || typeof token !== 'string') {
-    return { success: false, error: 'El enlace de gestión no es válido.' };
+    return { success: false, error: 'El enlace de gestiÃ³n no es vÃ¡lido.' };
   }
 
   const managementTokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -185,7 +226,7 @@ export async function cancelPublicBooking(token: string) {
     });
 
     if (!booking) {
-      return { success: false, error: 'El enlace de gestión no es válido.' };
+      return { success: false, error: 'El enlace de gestiÃ³n no es vÃ¡lido.' };
     }
 
     // Call the internal cancellation logic (which guarantees atomicity and sends email)
@@ -195,7 +236,7 @@ export async function cancelPublicBooking(token: string) {
       try {
         await sendBookingCancelledAdminEmail(booking.id);
       } catch (e) {
-        console.error('Error no bloqueante al despachar notificación administrativa de cancelación:', e);
+        console.error('Error no bloqueante al despachar notificaciÃ³n administrativa de cancelaciÃ³n:', e);
       }
       revalidatePath(`/mi-turno/${token}`);
     }
@@ -203,7 +244,7 @@ export async function cancelPublicBooking(token: string) {
     return result;
   } catch (error) {
     console.error('Error in cancelPublicBooking:', error);
-    return { success: false, error: 'Error al procesar la cancelación.' };
+    return { success: false, error: 'Error al procesar la cancelaciÃ³n.' };
   }
 }
 
@@ -230,7 +271,7 @@ import {
 
 export async function reschedulePublicBooking(token: string, localDate: string, localTime: string) {
   if (!token || typeof token !== 'string') {
-    return { success: false, error: 'El enlace de gestión no es válido.' };
+    return { success: false, error: 'El enlace de gestiÃ³n no es vÃ¡lido.' };
   }
 
   const managementTokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -242,7 +283,7 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
         include: { business: true }
       });
 
-      if (!booking) throw new Error('El enlace de gestión no es válido.');
+      if (!booking) throw new Error('El enlace de gestiÃ³n no es vÃ¡lido.');
       if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
         throw new Error('Este turno ya no puede reprogramarse.');
       }
@@ -263,7 +304,7 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
       const endMinute = startMinute + booking.serviceDuration;
       const isBlocked = blocks.some(b => Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute));
 
-      if (isBlocked) throw new Error('El horario está bloqueado excepcionalmente.');
+      if (isBlocked) throw new Error('El horario estÃ¡ bloqueado excepcionalmente.');
 
       const overlaps = await tx.booking.findMany({
         where: {
@@ -277,7 +318,7 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
       });
 
       if (overlaps.length > 0) {
-        throw new Error('Este horario acaba de ser ocupado. Elegí otro.');
+        throw new Error('Este horario acaba de ser ocupado. ElegíÃ­ otro.');
       }
 
       const updated = await tx.booking.updateMany({
@@ -302,19 +343,19 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
     try {
       await sendBookingRescheduledEmail(result.id, token);
     } catch (e) {
-      console.error('Error no bloqueante al despachar notificación de reprogramación:', e);
+      console.error('Error no bloqueante al despachar notificaciÃ³n de reprogramaciÃ³n:', e);
     }
 
     try {
       await sendBookingRescheduledAdminEmail(result.id, result.oldStartAt, result.oldEndAt);
     } catch (e) {
-      console.error('Error no bloqueante al despachar notificación administrativa de reprogramación:', e);
+      console.error('Error no bloqueante al despachar notificaciÃ³n administrativa de reprogramaciÃ³n:', e);
     }
 
     revalidatePath(`/mi-turno/${token}`);
     return { success: true };
   } catch (error) {
     console.error('Error in reschedulePublicBooking:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Error al procesar la reprogramación.' };
+    return { success: false, error: error instanceof Error ? error.message : 'Error al procesar la reprogramaciÃ³n.' };
   }
 }
