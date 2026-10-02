@@ -95,16 +95,16 @@ export default function PublicBookingClient({
 
         <div className="bg-gray-50 rounded-xl p-6 text-left space-y-4 mb-8">
           <div>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">CuÃ¡ndo</div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cuándo</div>
             <div className="font-medium">{localDate} a las {localTime} ({business.timezone})</div>
           </div>
           <div className="border-t border-gray-200 pt-4">
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">QuÃ©</div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Qué</div>
             <div className="font-medium">{srv?.name} con {prof?.name}</div>
             <div className="text-sm text-gray-500">{srv?.duration} min â€¢ ${srv?.price.toString()}</div>
           </div>
           <div className="border-t border-gray-200 pt-4">
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">DÃ³nde</div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Dónde</div>
             <div className="font-medium">{business.name}</div>
           </div>
         </div>
@@ -147,7 +147,7 @@ export default function PublicBookingClient({
         setExistingBookingInfo(res.existingBooking);
       } else
       if ((res as { error?: string }).error === 'El profesional ya tiene un turno en ese horario') {
-        setError('Este horario acaba de ser reservado. ElegíÃ­ otro horario.');
+        setError('Este horario acaba de ser reservado. Elegí otro horario.');
         setStep(2); // Go back to time selection
         // Refresh available times
         setIsLoadingTimes(true);
@@ -197,7 +197,7 @@ export default function PublicBookingClient({
         {step === 1 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Â¿QuÃ© servicio buscÃ¡s?</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">¿Qué servicio buscás?</h3>
               <div className="grid gap-3">
                 {services.map(s => (
                   <div key={s.id} onClick={() => setServiceId(s.id)} className={`flex items-center justify-between p-5 border-2 rounded-2xl cursor-pointer transition-all ${serviceId === s.id ? 'border-gray-900 bg-gray-50' : 'border-gray-100 hover:border-gray-300'}`}>
@@ -221,7 +221,7 @@ export default function PublicBookingClient({
 
             {professionals.length > 1 && (
               <div className="pt-4 border-t border-gray-100">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">ElegíÃ­ el profesional</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Elegí el profesional</h3>
                 <div className="grid gap-3">
                   {professionals.map(p => (
                     <div key={p.id} onClick={() => setProfessionalId(p.id)} className={`flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all ${professionalId === p.id ? 'border-gray-900 bg-gray-50' : 'border-gray-100 hover:border-gray-300'}`}>
@@ -250,7 +250,7 @@ export default function PublicBookingClient({
         {step === 2 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Â¿CuÃ¡ndo querÃ©s venir?</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">¿Cuándo querés venir?</h3>
 
               {/* Horizontal Date Picker */}
               <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2 snap-x">
@@ -308,7 +308,7 @@ export default function PublicBookingClient({
                       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </div>
                     <h4 className="text-gray-900 font-medium mb-1">Sin horarios</h4>
-                    <p className="text-gray-500 text-sm">No encontramos turnos para este dÃ­a. Por favor, elegÃ­ otra fecha.</p>
+                    <p className="text-gray-500 text-sm">No encontramos turnos para este día. Por favor, elegí otra fecha.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
@@ -346,7 +346,7 @@ export default function PublicBookingClient({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
-            <h4 className="text-red-900 font-bold mb-2">Ya tenÃ©s un turno para ese dÃ­a.</h4>
+            <h4 className="text-red-900 font-bold mb-2">Ya tenés un turno para ese día.</h4>
             <div className="bg-white p-4 rounded-xl border border-red-100 mb-4 inline-block text-left shadow-sm">
               <div className="font-medium text-gray-900">
                 {new Date(existingBookingInfo.startAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} Â· {new Date(existingBookingInfo.startAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}â€“{new Date(existingBookingInfo.endAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
@@ -355,7 +355,7 @@ export default function PublicBookingClient({
                 {existingBookingInfo.serviceName} Â· {existingBookingInfo.professionalName}
               </div>
             </div>
-            <p className="text-red-700 text-sm mb-6">Solo permitimos un turno por cliente por dÃ­a.</p>
+            <p className="text-red-700 text-sm mb-6">Solo permitimos un turno por cliente por día.</p>
             <button
               type="button"
               onClick={() => {
@@ -364,7 +364,7 @@ export default function PublicBookingClient({
               }}
               className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors"
             >
-              Elegíir otra fecha
+              Elegir otra fecha
             </button>
           </div>
         )}
@@ -382,7 +382,7 @@ export default function PublicBookingClient({
                     value={customerName}
                     onChange={e => setCustomerName(e.target.value)}
                     required
-                    placeholder="Ej. Juan PÃ©rez"
+                    placeholder="Ej. Juan Pérez"
                     className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
                     disabled={isSubmitting}
                   />
@@ -402,12 +402,12 @@ export default function PublicBookingClient({
               </div>
 
               <div className="mt-5">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">TelÃ©fono (opcional)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Teléfono (opcional)</label>
                 <input
                   type="tel"
                   value={customerPhone}
                   onChange={e => setCustomerPhone(e.target.value)}
-                  placeholder="Tu nÃºmero de celular"
+                  placeholder="Tu número de celular"
                   className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
                   disabled={isSubmitting}
                 />
@@ -419,7 +419,7 @@ export default function PublicBookingClient({
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   rows={3}
-                  placeholder="Â¿AlgÃºn comentario para el profesional?"
+                  placeholder="¿Algún comentario para el profesional?"
                   className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all resize-none"
                   disabled={isSubmitting}
                 />
