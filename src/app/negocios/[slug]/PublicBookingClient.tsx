@@ -143,8 +143,11 @@ export default function PublicBookingClient({
     if (res.success) {
       setSuccess(true);
     } else {
+      if ('reason' in res && res.reason === 'limit_exceeded') {
+        setExistingBookingInfo(res.existingBooking);
+      } else
       if ((res as { error?: string }).error === 'El profesional ya tiene un turno en ese horario') {
-        setError('Este horario acaba de ser reservado. ElegÃ­ otro horario.');
+        setError('Este horario acaba de ser reservado. ElegíÃ­ otro horario.');
         setStep(2); // Go back to time selection
         // Refresh available times
         setIsLoadingTimes(true);
@@ -218,7 +221,7 @@ export default function PublicBookingClient({
 
             {professionals.length > 1 && (
               <div className="pt-4 border-t border-gray-100">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">ElegÃ­ el profesional</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">ElegíÃ­ el profesional</h3>
                 <div className="grid gap-3">
                   {professionals.map(p => (
                     <div key={p.id} onClick={() => setProfessionalId(p.id)} className={`flex items-center p-4 border-2 rounded-2xl cursor-pointer transition-all ${professionalId === p.id ? 'border-gray-900 bg-gray-50' : 'border-gray-100 hover:border-gray-300'}`}>
@@ -361,7 +364,7 @@ export default function PublicBookingClient({
               }}
               className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors"
             >
-              Elegir otra fecha
+              Elegíir otra fecha
             </button>
           </div>
         )}
