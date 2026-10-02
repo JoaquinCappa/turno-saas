@@ -479,3 +479,34 @@ export async function sendBookingRescheduledAdminEmail(
     return { success: false, reason: 'exception', error };
   }
 }
+export async function sendTeamInvitationEmail(to: string, businessName: string, role: string, token: string) {
+  if (!resend || !emailFrom || !process.env.NEXT_PUBLIC_APP_URL) {
+    console.warn('RESEND_API_KEY, EMAIL_FROM o NEXT_PUBLIC_APP_URL no configurados. Se omite email de invitacion para:', to);
+    return { success: false, reason: 'missing_config' };
+  }
+  
+  try {
+    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invitacion/${token}`;
+    
+    const result = await resend.emails.send({
+      from: `Turnos SaaS <${emailFrom}>`,
+      to,
+      subject: `Invitacion para unirte a ${businessName}`,
+      html: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Has sido invitado a unirte a ${businessName}</h2>
+          <p>Se te ha invitado a unirte al equipo con el rol de <strong>${role}</strong>.</p>
+          <p>La invitacion expira en 72 horas.</p>
+          <p>Haz clic en el siguiente enlace para aceptar la invitacion y definir tu contraseña:</p>
+          <p><a href="${inviteUrl}">${inviteUrl}</a></p>
+        </div>
+      `
+    });
+    
+    if (result.error) return { success: false, reason: 'provider_error', error: result.error };
+    return { success: true, id: result.data?.id };
+  } catch (error) {
+    console.error('Error enviando email de invitacion:', error);
+    return { success: false, reason: 'exception', error };
+  }
+}

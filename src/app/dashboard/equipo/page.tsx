@@ -2,6 +2,7 @@ import { getAuthenticatedContext } from '@/lib/auth';
 import DashboardHeader from '../DashboardHeader';
 import EquipoClient from './EquipoClient';
 import { listTeamMembers } from '@/app/actions/team';
+import { listTeamInvitations } from '@/app/actions/teamInvitations';
 import { redirect } from 'next/navigation';
 
 export default async function EquipoPage() {
@@ -11,11 +12,17 @@ export default async function EquipoPage() {
     redirect('/dashboard');
   }
 
-  const res = await listTeamMembers();
+  const [membersRes, invitesRes] = await Promise.all([
+    listTeamMembers(),
+    listTeamInvitations()
+  ]);
   
-  if (!res.success || !res.data) {
-    return <div>Error al cargar el equipo: {res.error}</div>;
+  if (!membersRes.success || !membersRes.data) {
+    return <div>Error al cargar el equipo: {membersRes.error}</div>;
   }
+
+  const initialMembers = membersRes.data as unknown as { id: string; name: string | null; email: string; role: 'OWNER' | 'ADMIN' | 'STAFF'; isActive: boolean; createdAt: Date }[];
+  const initialInvites = (invitesRes.success && invitesRes.data ? invitesRes.data : []) as unknown as { id: string; email: string; role: 'ADMIN' | 'STAFF'; expiresAt: Date; acceptedAt: Date | null; revokedAt: Date | null; createdAt: Date }[];
 
   return (
     <>
@@ -27,7 +34,11 @@ export default async function EquipoPage() {
               <h2 className="text-lg font-bold text-white mb-2">Miembros del equipo</h2>
               <p className="text-gray-400">Administrá los usuarios que tienen acceso a tu negocio.</p>
             </div>
-            <EquipoClient initialMembers={res.data as unknown as { id: string; name: string | null; email: string; role: 'OWNER' | 'ADMIN' | 'STAFF'; isActive: boolean; createdAt: Date }[]} currentUserId={session.user.id} />
+            <EquipoClient 
+              initialMembers={initialMembers} 
+              initialInvites={initialInvites}
+              currentUserId={session.user.id} 
+            />
           </div>
         </div>
       </div>
