@@ -3,14 +3,16 @@ import { getPublicBusiness, getPublicServices, getPublicProfessionals } from '@/
 import PublicBookingClient from './PublicBookingClient';
 import { toZonedTime, format } from 'date-fns-tz';
 
-export default async function PublicBusinessPage({ params }: { params: { slug: string } }) {
-  const business = await getPublicBusiness(params.slug);
+export default async function PublicBusinessPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const business = await getPublicBusiness(slug);
 
   if (!business) {
     notFound();
   }
 
-  const services = await getPublicServices(business.id);
+  const rawServices = await getPublicServices(business.id);
+  const services = rawServices.map(s => ({ id: s.id, name: s.name, duration: s.duration, price: Number(s.price) }));
   const professionals = await getPublicProfessionals(business.id);
 
   if (services.length === 0 || professionals.length === 0) {
