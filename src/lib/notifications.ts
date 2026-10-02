@@ -484,10 +484,10 @@ export async function sendTeamInvitationEmail(to: string, businessName: string, 
     console.warn('RESEND_API_KEY, EMAIL_FROM o NEXT_PUBLIC_APP_URL no configurados. Se omite email de invitacion para:', to);
     return { success: false, reason: 'missing_config' };
   }
-  
+
   try {
     const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invitacion/${token}`;
-    
+
     const result = await resend.emails.send({
       from: `Turnos SaaS <${emailFrom}>`,
       to,
@@ -502,11 +502,44 @@ export async function sendTeamInvitationEmail(to: string, businessName: string, 
         </div>
       `
     });
-    
+
     if (result.error) return { success: false, reason: 'provider_error', error: result.error };
     return { success: true, id: result.data?.id };
   } catch (error) {
     console.error('Error enviando email de invitacion:', error);
+    return { success: false, reason: 'exception', error };
+  }
+}
+export async function sendPasswordResetEmail(to: string, userName: string | null, token: string) {
+  if (!resend || !emailFrom || !process.env.NEXT_PUBLIC_APP_URL) {
+    console.warn('RESEND_API_KEY, EMAIL_FROM o NEXT_PUBLIC_APP_URL no configurados. Se omite email de recuperacion para:', to);
+    return { success: false, reason: 'missing_config' };
+  }
+
+  try {
+    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/restablecer/${token}`;
+    const displayName = userName || 'Usuario';
+
+    const result = await resend.emails.send({
+      from: `Turnos SaaS <${emailFrom}>`,
+      to,
+      subject: `Recuperación de contraseña`,
+      html: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Hola, ${displayName}</h2>
+          <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta.</p>
+          <p>Este enlace expirará en 2 horas.</p>
+          <p>Haz clic en el siguiente enlace para definir una nueva contraseña:</p>
+          <p><a href="${resetUrl}">${resetUrl}</a></p>
+          <p>Si no solicitaste este cambio, puedes ignorar este correo.</p>
+        </div>
+      `
+    });
+
+    if (result.error) return { success: false, reason: 'provider_error', error: result.error };
+    return { success: true, id: result.data?.id };
+  } catch (error) {
+    console.error('Error enviando email de recuperacion:', error);
     return { success: false, reason: 'exception', error };
   }
 }

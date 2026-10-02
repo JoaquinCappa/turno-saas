@@ -2,6 +2,36 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      businessId: string;
+      role: 'OWNER' | 'ADMIN' | 'STAFF';
+      passwordVersion?: number;
+    };
+  }
+
+  interface User {
+    id: string;
+    businessId: string;
+    role: 'OWNER' | 'ADMIN' | 'STAFF';
+    passwordVersion: number;
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    businessId: string;
+    role: 'OWNER' | 'ADMIN' | 'STAFF';
+    passwordVersion?: number;
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -52,6 +82,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           businessId: user.businessId,
           role: user.role,
+          passwordVersion: user.passwordVersion,
         };
       },
     }),
@@ -62,6 +93,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.businessId = user.businessId;
         token.role = user.role;
+        token.passwordVersion = user.passwordVersion;
       }
       return token;
     },
@@ -70,6 +102,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.businessId = token.businessId;
         session.user.role = token.role;
+        session.user.passwordVersion = token.passwordVersion;
       }
       return session;
     },
@@ -82,8 +115,6 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.AUTH_SECRET,
 };
-
-import { getServerSession } from 'next-auth';
 
 export async function getAuthenticatedContext() {
   const session = await getServerSession(authOptions);
@@ -104,6 +135,11 @@ export async function getAuthenticatedContext() {
     !user.business ||
     !user.business.isActive
   ) {
+    return null;
+  }
+
+  const tokenVersion = session.user.passwordVersion ?? 0;
+  if (user.passwordVersion !== tokenVersion) {
     return null;
   }
 

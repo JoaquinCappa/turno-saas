@@ -4,6 +4,7 @@ import DashboardHeader from '../DashboardHeader';
 import HorariosClient from './HorariosClient';
 import BusinessClient from './BusinessClient';
 import BloqueosClient from './BloqueosClient';
+import SecurityClient from './SecurityClient';
 
 export default async function ConfiguracionPage() {
   const session = await getAuthenticatedContext();
@@ -66,6 +67,7 @@ export default async function ConfiguracionPage() {
               userRole={userRole}
             />
 
+            <SecurityClient />
           </div>
         </div>
       </div>
