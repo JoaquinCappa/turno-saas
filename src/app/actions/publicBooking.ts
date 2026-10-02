@@ -278,50 +278,89 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findUnique({
-        where: { managementTokenHash },
-        include: { business: true }
-      });
-
-      if (!booking) throw new Error('El enlace de gestiÃ³n no es vÃ¡lido.');
-      if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
-        throw new Error('Este turno ya no puede reprogramarse.');
-      }
-
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.professionalId}));`;
-
-      const startAt = createBusinessDate(localDate, localTime, booking.business.timezone);
-      const endAt = calculateEndAt(startAt, booking.serviceDuration);
-      const now = new Date();
-      if (startAt < now) throw new Error('El horario no puede ser en el pasado.');
-
-      const exactDate = new Date(`${localDate}T00:00:00Z`);
-      const blocks = await tx.blockedTime.findMany({
-        where: { businessId: booking.businessId, date: exactDate }
-      });
-      const [hour, minute] = localTime.split(':').map(Number);
-      const startMinute = hour * 60 + minute;
-      const endMinute = startMinute + booking.serviceDuration;
-      const isBlocked = blocks.some(b => Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute));
-
-      if (isBlocked) throw new Error('El horario estÃ¡ bloqueado excepcionalmente.');
-
-      const overlaps = await tx.booking.findMany({
-        where: {
-          businessId: booking.businessId,
-          professionalId: booking.professionalId,
-          status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-          id: { not: booking.id },
-          startAt: { lt: endAt },
-          endAt: { gt: startAt }
+        const booking = await tx.booking.findUnique({
+          where: { managementTokenHash },
+          include: { business: true, customer: true, service: true, professional: true }
+        });
+  
+        if (!booking) throw new Error('El enlace de gestin no es vǭlido.');
+        if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
+          throw new Error('Este turno ya no puede reprogramarse.');
         }
-      });
 
-      if (overlaps.length > 0) {
-        throw new Error('Este horario acaba de ser ocupado. ElegíÃ­ otro.');
-      }
+        if (!booking.business.isActive) throw new Error('Negocio invǭlido o inactivo.');
+        if (!booking.service.isActive) throw new Error('Servicio invǭlido o inactivo.');
+        if (!booking.professional.isActive) throw new Error('Profesional invǭlido o inactivo.');
+  
+        if (!booking.customer?.email) throw new Error('Cliente sin email.');
+        const normalizedEmail = booking.customer.email.trim().toLowerCase();
+        const lockStr = `limit-${booking.businessId}-${normalizedEmail}-${localDate}`;
+        await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1));', lockStr);
 
-      const updated = await tx.booking.updateMany({
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.professionalId}));`;
+  
+        const startAt = createBusinessDate(localDate, localTime, booking.business.timezone);
+        const endAt = calculateEndAt(startAt, booking.serviceDuration);
+        const now = new Date();
+        if (startAt < now) throw new Error('El horario no puede ser en el pasado.');
+
+        const startOfDayUTC = fromZonedTime(`${localDate}T00:00:00`, booking.business.timezone);
+        const endOfDayUTC = fromZonedTime(`${localDate}T23:59:59.999`, booking.business.timezone);
+
+        const existingBooking = await tx.booking.findFirst({
+          where: {
+            businessId: booking.businessId,
+            customer: { email: normalizedEmail },
+            startAt: { gte: startOfDayUTC, lte: endOfDayUTC },
+            status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW'] },
+            id: { not: booking.id }
+          }
+        });
+
+        if (existingBooking) {
+          throw new Error('Ya tenǸs un turno para ese dǭa. Solo permitimos un turno por cliente por dǭa.');
+        }
+
+        const { dayOfWeek, minuteOfDay: startMinute } = getBusinessDayAndMinute(startAt, booking.business.timezone);
+        const { minuteOfDay: endMinute } = getBusinessDayAndMinute(endAt, booking.business.timezone);
+
+        if (endMinute <= startMinute) {
+          throw new Error('El turno no puede cruzar la medianoche.');
+        }
+
+        const businessHours = await tx.businessHour.findMany({
+          where: { businessId: booking.businessId, dayOfWeek }
+        });
+
+        const isWithinHours = businessHours.some(h => startMinute >= h.startMinute && endMinute <= h.endMinute);
+        if (!isWithinHours) {
+          throw new Error('El horario seleccionado estǭ fuera del horario de atencin.');
+        }
+  
+        const exactDate = new Date(`${localDate}T00:00:00Z`);
+        const blocks = await tx.blockedTime.findMany({
+          where: { businessId: booking.businessId, date: exactDate }
+        });
+        
+        const isBlocked = blocks.some(b => Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute));
+        if (isBlocked) throw new Error('El horario estǭ bloqueado excepcionalmente.');
+  
+        const overlaps = await tx.booking.findMany({
+          where: {
+            businessId: booking.businessId,
+            professionalId: booking.professionalId,
+            status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+            id: { not: booking.id },
+            startAt: { lt: endAt },
+            endAt: { gt: startAt }
+          }
+        });
+  
+        if (overlaps.length > 0) {
+          throw new Error('Este horario acaba de ser ocupado. Eleg otro.');
+        }
+  
+        const updated = await tx.booking.updateMany({
         where: {
           id: booking.id,
           status: { in: ['PENDING', 'CONFIRMED'] }
@@ -359,3 +398,4 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
     return { success: false, error: error instanceof Error ? error.message : 'Error al procesar la reprogramaciÃ³n.' };
   }
 }
+
