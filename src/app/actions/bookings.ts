@@ -96,9 +96,15 @@ export async function executeBooking(
     const runTransaction = async (tx: Prisma.TransactionClient) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${data.professionalId}));`;
 
-      const { blocks: txBlocks } = await getEffectiveAvailability(
+      const { hours: txHours, blocks: txBlocks } = await getEffectiveAvailability(
         tx, businessId, data.professionalId, dayOfWeek, exactDate
       );
+
+      const isStillWithinHours = isTimeWithinHours(startMinute, endMinute, txHours);
+      if (!isStillWithinHours) {
+        throw new Error('El horario seleccionado esta fuera del horario de atencion');
+      }
+
       const isBlocked = isTimeBlocked(startMinute, endMinute, txBlocks);
 
       if (isBlocked) {
