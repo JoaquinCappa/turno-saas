@@ -4,6 +4,7 @@ import { getAuthenticatedContext } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createBusinessDate, getBusinessDayAndMinute, calculateEndAt } from '@/lib/date-utils';
+import { getEffectiveAvailability } from '@/lib/availability';
 import { BookingStatus, Prisma } from '@prisma/client';
 import {
   sendBookingCreatedEmail,
@@ -79,34 +80,29 @@ export async function executeBooking(
       return { success: false, error: 'El turno no puede cruzar la medianoche' };
     }
 
-    const businessHours = await db.businessHour.findMany({
-      where: { businessId, dayOfWeek }
-    });
+        const exactDate = new Date(`${data.localDate}T00:00:00Z`);
+    const { hours: businessHours } = await getEffectiveAvailability(
+      db, businessId, data.professionalId, dayOfWeek, exactDate
+    );
 
-    const isWithinHours = businessHours.some(h => startMinute >= h.startMinute && endMinute <= h.endMinute);
+    const { isTimeWithinHours, isTimeBlocked } = await import('@/lib/availability');
+
+    const isWithinHours = isTimeWithinHours(startMinute, endMinute, businessHours);
     if (!isWithinHours) {
-      return { success: false, error: 'El horario seleccionado está fuera del horario de atención' };
+      return { success: false, error: 'El horario seleccionado esta fuera del horario de atencion' };
     }
 
     // 4. Concurrencia y Solapamiento (Postgres Advisory Lock)
-    // El bloqueo consultivo por profesional encola las peticiones simultáneas,
-    // evitando race conditions y falsos positivos de Serializable.
     const runTransaction = async (tx: Prisma.TransactionClient) => {
-
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${data.professionalId}));`;
 
-      // Chequear BlockedTimes (excepciones de fecha completa o intervalo)
-      const exactDate = new Date(`${data.localDate}T00:00:00Z`); // Asumimos que guardamos el date a las 00:00 UTC
-      const blocks = await tx.blockedTime.findMany({
-        where: { businessId, date: exactDate }
-      });
-
-      const isBlocked = blocks.some(b => {
-        return Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute);
-      });
+      const { blocks: txBlocks } = await getEffectiveAvailability(
+        tx, businessId, data.professionalId, dayOfWeek, exactDate
+      );
+      const isBlocked = isTimeBlocked(startMinute, endMinute, txBlocks);
 
       if (isBlocked) {
-        throw new Error('El horario está bloqueado excepcionalmente');
+        throw new Error('El horario esta bloqueado excepcionalmente');
       }
 
       // Chequear solapamientos de turnos
@@ -421,24 +417,21 @@ export async function adminRescheduleBooking(
         throw new Error('El turno no puede cruzar la medianoche');
       }
 
-      // Validar BusinessHours
-      const businessHours = await tx.businessHour.findMany({
-        where: { businessId, dayOfWeek }
-      });
+      // Validar Disponibilidad
+      const exactDate = new Date(`${localDate}T00:00:00Z`);
+      const { hours: businessHours, blocks } = await getEffectiveAvailability(
+        tx, businessId, newProfessionalId, dayOfWeek, exactDate
+      );
 
-      const isWithinHours = businessHours.some(h => startMinute >= h.startMinute && endMinute <= h.endMinute);
+      const { isTimeWithinHours, isTimeBlocked } = await import('@/lib/availability');
+
+      const isWithinHours = isTimeWithinHours(startMinute, endMinute, businessHours);
       if (!isWithinHours) {
-        throw new Error('El horario seleccionado está fuera del horario de atención');
+        throw new Error('El horario seleccionado esta fuera del horario de atencion');
       }
 
-      // Validar BlockedTime
-      const exactDate = new Date(`${localDate}T00:00:00Z`);
-      const blocks = await tx.blockedTime.findMany({
-        where: { businessId, date: exactDate }
-      });
-
-      const isBlocked = blocks.some(b => Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute));
-      if (isBlocked) throw new Error('El horario está bloqueado excepcionalmente');
+      const isBlocked = isTimeBlocked(startMinute, endMinute, blocks);
+      if (isBlocked) throw new Error('El horario esta bloqueado excepcionalmente');
 
       // Validar Overlap excluyendo el id actual
       const overlaps = await tx.booking.findMany({

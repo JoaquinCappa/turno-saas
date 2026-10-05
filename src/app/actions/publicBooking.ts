@@ -1,8 +1,9 @@
-﻿'use server';
+'use server';
 
 import prisma from '@/lib/prisma';
 import { fromZonedTime } from 'date-fns-tz';
 import { getBusinessDayAndMinute, createBusinessDate, calculateEndAt } from '@/lib/date-utils';
+import { getEffectiveAvailability } from '@/lib/availability';
 import { executeBooking, internalCancelBooking } from './bookings';
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
@@ -63,13 +64,9 @@ export async function getAvailableTimes(
   const dummyDate = createBusinessDate(localDate, "12:00", business.timezone);
   const day = getBusinessDayAndMinute(dummyDate, business.timezone).dayOfWeek;
 
-  const businessHours = await prisma.businessHour.findMany({
-    where: { businessId, dayOfWeek: day }
-  });
-
-  const blockedTimes = await prisma.blockedTime.findMany({
-    where: { businessId, date: exactDateAtMidnight }
-  });
+  const { hours: businessHours, blocks: blockedTimes } = await getEffectiveAvailability(
+    prisma, businessId, professionalId, day, exactDateAtMidnight
+  );
 
   // Calculate day boundaries to get overlapping bookings
   const dayStart = createBusinessDate(localDate, "00:00", business.timezone);
@@ -368,22 +365,20 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
           throw new Error('El turno no puede cruzar la medianoche.');
         }
 
-        const businessHours = await tx.businessHour.findMany({
-          where: { businessId: booking.businessId, dayOfWeek }
-        });
+        const exactDate = new Date(`${localDate}T00:00:00Z`);
+        const { hours: businessHours, blocks } = await getEffectiveAvailability(
+          tx, booking.businessId, booking.professionalId, dayOfWeek, exactDate
+        );
 
-        const isWithinHours = businessHours.some(h => startMinute >= h.startMinute && endMinute <= h.endMinute);
+        const { isTimeWithinHours, isTimeBlocked } = await import('@/lib/availability');
+
+        const isWithinHours = isTimeWithinHours(startMinute, endMinute, businessHours);
         if (!isWithinHours) {
-          throw new Error('El horario seleccionado estǭ fuera del horario de atencin.');
+          throw new Error('El horario seleccionado esta fuera del horario de atencion.');
         }
 
-        const exactDate = new Date(`${localDate}T00:00:00Z`);
-        const blocks = await tx.blockedTime.findMany({
-          where: { businessId: booking.businessId, date: exactDate }
-        });
-
-        const isBlocked = blocks.some(b => Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute));
-        if (isBlocked) throw new Error('El horario estǭ bloqueado excepcionalmente.');
+        const isBlocked = isTimeBlocked(startMinute, endMinute, blocks);
+        if (isBlocked) throw new Error('El horario esta bloqueado excepcionalmente.');
 
         const overlaps = await tx.booking.findMany({
           where: {
