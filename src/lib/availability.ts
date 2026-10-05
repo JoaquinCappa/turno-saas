@@ -13,7 +13,7 @@ export async function getEffectiveAvailability(
   });
 
   if (!professional || professional.businessId !== businessId) {
-    throw new Error('Profesional invlido');
+    throw new Error('Profesional invalido');
   }
 
   const businessHours = await tx.businessHour.findMany({
@@ -24,10 +24,20 @@ export async function getEffectiveAvailability(
     where: { businessId, date: exactDateAtMidnight }
   });
 
+  const professionalBlocks = await tx.professionalBlockedTime.findMany({
+    where: { professionalId, date: exactDateAtMidnight }
+  });
+
+  // Union de bloqueos (BlockedTime U ProfessionalBlockedTime)
+  const blocks = [
+    ...blockedTimes.map(b => ({ startMinute: b.startMinute, endMinute: b.endMinute })),
+    ...professionalBlocks.map(b => ({ startMinute: b.startMinute, endMinute: b.endMinute }))
+  ];
+
   if (!professional.isCustomHoursEnabled) {
     return {
       hours: businessHours.map(h => ({ startMinute: h.startMinute, endMinute: h.endMinute })),
-      blocks: blockedTimes.map(b => ({ startMinute: b.startMinute, endMinute: b.endMinute }))
+      blocks
     };
   }
 
@@ -35,11 +45,7 @@ export async function getEffectiveAvailability(
     where: { professionalId, dayOfWeek }
   });
 
-  const professionalBlocks = await tx.professionalBlockedTime.findMany({
-    where: { professionalId, date: exactDateAtMidnight }
-  });
-
-  // Interseccin de horarios (BusinessHour ∩ ProfessionalHour)
+  // Interseccion de horarios (BusinessHour ∩ ProfessionalHour)
   const hours: { startMinute: number, endMinute: number }[] = [];
   for (const bh of businessHours) {
     for (const ph of professionalHours) {
@@ -50,12 +56,6 @@ export async function getEffectiveAvailability(
       }
     }
   }
-
-  // Unin de bloqueos (BlockedTime ∪ ProfessionalBlockedTime)
-  const blocks = [
-    ...blockedTimes.map(b => ({ startMinute: b.startMinute, endMinute: b.endMinute })),
-    ...professionalBlocks.map(b => ({ startMinute: b.startMinute, endMinute: b.endMinute }))
-  ];
 
   return { hours, blocks };
 }
