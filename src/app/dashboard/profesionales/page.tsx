@@ -3,18 +3,25 @@ import prisma from '@/lib/prisma';
 import DashboardHeader from '../DashboardHeader';
 import ProfesionalesClient from './ProfesionalesClient';
 
-import { Professional } from '@prisma/client';
+
 
 export default async function ProfesionalesPage() {
   const session = await getAuthenticatedContext();
 
-  let professionals: Professional[] = [];
-  if (session?.user?.businessId) {
-    professionals = await prisma.professional.findMany({
-      where: { businessId: session.user.businessId },
-      orderBy: { createdAt: 'desc' },
-    });
+  if (!session?.user?.businessId) {
+    return <div>No autorizado</div>;
   }
+
+  const businessId = session.user.businessId;
+
+  const professionals = await prisma.professional.findMany({
+    where: { businessId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const businessHours = await prisma.businessHour.findMany({
+    where: { businessId },
+  });
 
   return (
     <>
@@ -27,6 +34,7 @@ export default async function ProfesionalesPage() {
           </div>
           <ProfesionalesClient 
             initialProfessionals={professionals} 
+            businessHours={businessHours}
             userRole={session?.user?.role || 'STAFF'} 
           />
         </div>
