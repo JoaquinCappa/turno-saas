@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/dashboard/Modal';
 import StatusBadge from '@/components/dashboard/StatusBadge';
-import { createBooking, cancelBooking, completeBooking, confirmBooking, noShowBooking } from '@/app/actions/bookings';
+import { createBooking, cancelBooking, completeBooking, confirmBooking, noShowBooking, adminRescheduleBooking } from '@/app/actions/bookings';
 import { formatBusinessDate } from '@/lib/date-utils';
 
 type BookingItem = {
@@ -17,7 +17,7 @@ type BookingItem = {
   servicePrice: number;
   notes: string | null;
   customer: { name: string; phone: string | null; email: string | null };
-  professional: { name: string };
+  professionalId: string; professional: { name: string };
 };
 
 export default function TurnosClient({
@@ -55,6 +55,11 @@ export default function TurnosClient({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleProfId, setRescheduleProfId] = useState('');
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleError, setRescheduleError] = useState('');
 
   // Local Filter State (for controlled inputs before pushing to URL)
   const [localFilters, setLocalFilters] = useState(filters);
@@ -78,7 +83,7 @@ export default function TurnosClient({
     if (newFilters.date) params.set('date', newFilters.date);
     if (newFilters.q) params.set('q', newFilters.q);
     if (page > 1) params.set('page', page.toString());
-    
+
     router.push(`?${params.toString()}`);
   };
 
@@ -116,6 +121,35 @@ export default function TurnosClient({
       setCustomerId(''); setServiceId(''); setProfessionalId(''); setLocalDate(''); setLocalTime(''); setNotes('');
     } else {
       setFormError(res.error || 'Error al guardar');
+    }
+  };
+
+
+  const handleStartReschedule = () => {
+    if (!selectedBooking) return;
+    setRescheduleProfId(selectedBooking.professionalId);
+    setRescheduleDate(formatBusinessDate(selectedBooking.startAt, businessTimezone, 'yyyy-MM-dd'));
+    setRescheduleTime(formatBusinessDate(selectedBooking.startAt, businessTimezone, 'HH:mm'));
+    setRescheduleError('');
+    setIsRescheduling(true);
+  };
+
+  const handleSaveReschedule = async () => {
+    if (!selectedBooking) return;
+    if (!rescheduleProfId || !rescheduleDate || !rescheduleTime) {
+      setRescheduleError('Completá todos los campos.');
+      return;
+    }
+    setIsActioning(true);
+    setRescheduleError('');
+    const res = await adminRescheduleBooking(selectedBooking.id, rescheduleProfId, rescheduleDate, rescheduleTime);
+    setIsActioning(false);
+
+    if (res?.success) {
+      setIsRescheduling(false);
+      setSelectedBooking(null);
+    } else {
+      setRescheduleError(res?.error || 'Error al reprogramar el turno');
     }
   };
 
@@ -219,7 +253,7 @@ export default function TurnosClient({
                   const timeStr = formatBusinessDate(b.startAt, businessTimezone, 'HH:mm');
                   const isPending = b.status === 'PENDING';
                   const isConfirmed = b.status === 'CONFIRMED';
-                  
+
                   return (
                     <tr key={b.id} className="hover:bg-[#1A1A1C] transition-colors cursor-pointer" onClick={(e) => {
                       if ((e.target as HTMLElement).closest('button')) return;
@@ -246,7 +280,10 @@ export default function TurnosClient({
                         )}
                         {userRole !== 'STAFF' && (isPending || isConfirmed) && (
                             <>
-                              <button onClick={() => executeAction('cancel', b.id)} disabled={isActioning} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-colors" title="Cancelar">
+                              <button onClick={() => { setSelectedBooking(b); setTimeout(() => handleStartReschedule(), 0); }} disabled={isActioning} className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-md transition-colors" title="Reprogramar">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            </button>
+                            <button onClick={() => executeAction('cancel', b.id)} disabled={isActioning} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-colors" title="Cancelar">
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                             <button onClick={() => executeAction('noshow', b.id)} disabled={isActioning} className="p-1.5 text-orange-500 hover:bg-orange-500/10 rounded-md transition-colors" title="No asistió">
@@ -262,20 +299,20 @@ export default function TurnosClient({
             </tbody>
           </table>
         </div>
-        
+
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="p-4 border-t border-gray-800 flex items-center justify-between">
             <span className="text-gray-400 text-sm">Mostrando {(currentPage - 1) * pageSize + 1} a {Math.min(currentPage * pageSize, totalItems)} de {totalItems}</span>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => pushFilters(localFilters, currentPage - 1)}
                 disabled={currentPage <= 1}
                 className="px-3 py-1.5 bg-[#1A1A1C] border border-gray-800 text-gray-300 rounded-lg text-sm disabled:opacity-50"
               >
                 Anterior
               </button>
-              <button 
+              <button
                 onClick={() => pushFilters(localFilters, currentPage + 1)}
                 disabled={currentPage >= totalPages}
                 className="px-3 py-1.5 bg-[#1A1A1C] border border-gray-800 text-gray-300 rounded-lg text-sm disabled:opacity-50"
@@ -291,7 +328,7 @@ export default function TurnosClient({
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Nuevo Turno">
         <div className="space-y-4 mt-2">
           {formError && <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">{formError}</div>}
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Cliente</label>
             <select value={customerId} onChange={e => setCustomerId(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500">
@@ -342,8 +379,8 @@ export default function TurnosClient({
       </Modal>
 
       {/* MODAL DETALLE DE TURNO */}
-      <Modal isOpen={!!selectedBooking} onClose={() => !isActioning && setSelectedBooking(null)} title="Detalle del Turno">
-        {selectedBooking && (
+      <Modal isOpen={!!selectedBooking} onClose={() => { if (!isActioning) { setSelectedBooking(null); setIsRescheduling(false); } }} title={isRescheduling ? "Reprogramar Turno" : "Detalle del Turno"}>
+        {selectedBooking && !isRescheduling && (
           <div className="space-y-6">
             <div className="flex justify-between items-start">
               <div>
@@ -353,7 +390,7 @@ export default function TurnosClient({
               </div>
               <StatusBadge status={selectedBooking.status === 'CONFIRMED' ? 'Confirmado' : selectedBooking.status === 'PENDING' ? 'Pendiente' : selectedBooking.status === 'COMPLETED' ? 'Completado' : selectedBooking.status === 'CANCELLED' ? 'Cancelado' : 'Ausente'} />
             </div>
-            
+
             <div className="bg-[#1A1A1C] border border-gray-800 rounded-lg p-4 space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-400">Servicio</span>
@@ -405,11 +442,52 @@ export default function TurnosClient({
                   <button onClick={() => executeAction('noshow', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
                     Ausente
                   </button>
+                  <button onClick={handleStartReschedule} disabled={isActioning} className="px-4 py-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+                    Reprogramar
+                  </button>
                   <button onClick={() => executeAction('cancel', selectedBooking.id)} disabled={isActioning} className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
                     Cancelar
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {selectedBooking && isRescheduling && (
+          <div className="space-y-4 mt-2">
+            {rescheduleError && <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">{rescheduleError}</div>}
+
+            <div className="bg-[#1A1A1C] border border-gray-800 rounded-lg p-4 space-y-2 mb-4">
+              <p className="text-sm text-gray-400">Cliente: <span className="text-white font-medium">{selectedBooking.customer.name}</span></p>
+              <p className="text-sm text-gray-400">Servicio: <span className="text-white font-medium">{selectedBooking.serviceName} ({selectedBooking.serviceDuration} min)</span></p>
+              <p className="text-sm text-gray-400">Horario actual: <span className="text-white font-medium">{formatBusinessDate(selectedBooking.startAt, businessTimezone, 'dd/MM/yyyy HH:mm')}</span></p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Nuevo Profesional</label>
+              <select value={rescheduleProfId} onChange={e => setRescheduleProfId(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500">
+                <option value="">Seleccionar profesional</option>
+                {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Nueva Fecha</label>
+                <input type="date" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Nueva Hora</label>
+                <input type="time" value={rescheduleTime} onChange={e => setRescheduleTime(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500" />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-800 mt-4">
+              <button onClick={() => setIsRescheduling(false)} disabled={isActioning} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white">Volver</button>
+              <button onClick={handleSaveReschedule} disabled={isActioning} className="bg-white text-black px-6 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors disabled:opacity-50">
+                {isActioning ? 'Guardando...' : 'Guardar'}
+              </button>
             </div>
           </div>
         )}
