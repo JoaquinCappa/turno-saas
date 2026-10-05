@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatBusinessDate, getBusinessDayAndMinute } from '@/lib/date-utils';
 import Modal from '@/components/dashboard/Modal';
 import StatusBadge from '@/components/dashboard/StatusBadge';
-import { cancelBooking, completeBooking, confirmBooking, noShowBooking } from '@/app/actions/bookings';
+import { cancelBooking, completeBooking, confirmBooking, noShowBooking, adminRescheduleBooking } from '@/app/actions/bookings';
 import { addDays, parseISO, format } from 'date-fns';
 
 type Booking = {
@@ -48,6 +48,11 @@ export default function CalendarioClient({
   }));
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleProfId, setRescheduleProfId] = useState('');
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleError, setRescheduleError] = useState('');
   const [isActioning, setIsActioning] = useState(false);
 
   // Escala visual
@@ -183,6 +188,35 @@ export default function CalendarioClient({
         </div>
       </div>
     );
+  };
+
+
+  const handleStartReschedule = () => {
+    if (!selectedBooking) return;
+    setRescheduleProfId(selectedBooking.professional.id);
+    setRescheduleDate(formatBusinessDate(selectedBooking.startAt, businessTimezone, 'yyyy-MM-dd'));
+    setRescheduleTime(formatBusinessDate(selectedBooking.startAt, businessTimezone, 'HH:mm'));
+    setRescheduleError('');
+    setIsRescheduling(true);
+  };
+
+  const handleSaveReschedule = async () => {
+    if (!selectedBooking) return;
+    if (!rescheduleProfId || !rescheduleDate || !rescheduleTime) {
+      setRescheduleError('Completá todos los campos.');
+      return;
+    }
+    setIsActioning(true);
+    setRescheduleError('');
+    const res = await adminRescheduleBooking(selectedBooking.id, rescheduleProfId, rescheduleDate, rescheduleTime);
+    setIsActioning(false);
+
+    if (res?.success) {
+      setIsRescheduling(false);
+      setSelectedBooking(null);
+    } else {
+      setRescheduleError(res?.error || 'Error al reprogramar el turno');
+    }
   };
 
   const handleAction = async (action: 'cancel' | 'complete' | 'confirm' | 'noshow') => {
@@ -334,8 +368,8 @@ export default function CalendarioClient({
       </div>
 
       {/* MODAL DETALLE DE TURNO */}
-      <Modal isOpen={!!selectedBooking} onClose={() => !isActioning && setSelectedBooking(null)} title="Detalle del Turno">
-        {selectedBooking && (
+      <Modal isOpen={!!selectedBooking} onClose={() => { if (!isActioning) { setSelectedBooking(null); setIsRescheduling(false); } }} title={isRescheduling ? "Reprogramar Turno" : "Detalle del Turno"}>
+          {selectedBooking && !isRescheduling && (
           <div className="space-y-6">
             <div className="flex justify-between items-start">
               <div>
@@ -412,7 +446,10 @@ export default function CalendarioClient({
                   >
                     Ausente
                   </button>
-                  <button
+                  <button onClick={handleStartReschedule} disabled={isActioning} className="px-4 py-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+                      Reprogramar
+                    </button>
+                    <button
                     onClick={() => handleAction('cancel')}
                     disabled={isActioning}
                     className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
@@ -421,9 +458,47 @@ export default function CalendarioClient({
                   </button>
                 </>
               )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {selectedBooking && isRescheduling && (
+            <div className="space-y-4 mt-2">
+              {rescheduleError && <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">{rescheduleError}</div>}
+
+              <div className="bg-[#1A1A1C] border border-gray-800 rounded-lg p-4 space-y-2 mb-4">
+                <p className="text-sm text-gray-400">Cliente: <span className="text-white font-medium">{selectedBooking.customer.name}</span></p>
+                <p className="text-sm text-gray-400">Servicio: <span className="text-white font-medium">{selectedBooking.serviceName} ({selectedBooking.serviceDuration} min)</span></p>
+                <p className="text-sm text-gray-400">Horario actual: <span className="text-white font-medium">{formatBusinessDate(selectedBooking.startAt, businessTimezone, 'dd/MM/yyyy HH:mm')}</span></p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Nuevo Profesional</label>
+                <select value={rescheduleProfId} onChange={e => setRescheduleProfId(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500">
+                  <option value="">Seleccionar profesional</option>
+                  {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Nueva Fecha</label>
+                  <input type="date" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Nueva Hora</label>
+                  <input type="time" value={rescheduleTime} onChange={e => setRescheduleTime(e.target.value)} className="w-full bg-[#111113] border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-gray-500" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-800 mt-4">
+                <button onClick={() => setIsRescheduling(false)} disabled={isActioning} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white">Volver</button>
+                <button onClick={handleSaveReschedule} disabled={isActioning} className="bg-white text-black px-6 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors disabled:opacity-50">
+                  {isActioning ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          )}
       </Modal>
 
     </div>
