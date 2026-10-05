@@ -180,7 +180,7 @@ export async function sendBookingCancelledEmail(bookingId: string) {
   }
 }
 
-export async function sendBookingRescheduledEmail(bookingId: string, managementToken?: string) {
+export async function sendBookingRescheduledEmail(bookingId: string, managementToken?: string, oldProfessionalName?: string) {
   if (!resendApiKey || !emailFrom || !resend) {
     console.warn('RESEND_API_KEY o EMAIL_FROM no configurados. Se omite el envío de email de reprogramación para la reserva:', bookingId);
     return { success: false, reason: 'missing_config' };
@@ -240,6 +240,7 @@ export async function sendBookingRescheduledEmail(bookingId: string, managementT
           <h3 style="margin-top: 0; color: #555;">Nuevos detalles del turno</h3>
           <p style="margin: 8px 0;"><strong>Servicio:</strong> ${booking.serviceName}</p>
           <p style="margin: 8px 0;"><strong>Profesional:</strong> ${professional.name}</p>
+            ${oldProfessionalName ? `<p style="margin: 8px 0; color: #888; font-size: 14px;">(Antes con: ${oldProfessionalName})</p>` : ''}
           <p style="margin: 8px 0;"><strong>Fecha:</strong> ${dateStr}</p>
           <p style="margin: 8px 0;"><strong>Horario:</strong> ${timeStartStr} a ${timeEndStr}</p>
           ${addressLine}
@@ -402,7 +403,8 @@ export async function sendBookingCancelledAdminEmail(bookingId: string) {
 export async function sendBookingRescheduledAdminEmail(
   bookingId: string,
   oldStartAt: Date,
-  oldEndAt: Date
+  oldEndAt: Date,
+  oldProfessionalName?: string
 ) {
   if (!resendApiKey || !emailFrom || !resend) {
     console.warn('RESEND_API_KEY o EMAIL_FROM no configurados. Se omite email admin (reprogramación) para:', bookingId);
@@ -455,6 +457,7 @@ export async function sendBookingRescheduledAdminEmail(
           <p style="margin: 8px 0;"><strong>Cliente:</strong> ${customer.name}</p>
           <p style="margin: 8px 0;"><strong>Servicio:</strong> ${booking.serviceName} (${booking.serviceDuration} min)</p>
           <p style="margin: 8px 0;"><strong>Profesional:</strong> ${professional.name}</p>
+            ${oldProfessionalName ? `<p style="margin: 8px 0; color: #666; font-size: 14px;">(Profesional anterior: ${oldProfessionalName})</p>` : ''}
           <p style="margin: 8px 0;"><strong>Fecha anterior:</strong> ${oldDateStr} de ${oldTimeStartStr} a ${oldTimeEndStr}</p>
           <p style="margin: 8px 0; font-weight: bold;"><strong>Nueva Fecha:</strong> ${newDateStr} de ${newTimeStartStr} a ${newTimeEndStr}</p>
           <p style="margin: 8px 0;"><strong>Precio:</strong> $${booking.servicePrice}</p>

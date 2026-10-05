@@ -8,7 +8,9 @@ import { BookingStatus, Prisma } from '@prisma/client';
 import {
   sendBookingCreatedEmail,
   sendBookingCancelledEmail,
-  sendBookingCreatedAdminEmail
+  sendBookingCreatedAdminEmail,
+  sendBookingRescheduledEmail,
+  sendBookingRescheduledAdminEmail
 } from '@/lib/notifications';
 import crypto from 'crypto';
 
@@ -168,7 +170,7 @@ export async function executeBooking(
     return { success: true, bookingId: result.booking.id };
   } catch (error) {
     console.error('Error creating booking:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Error al procesar el turno' };
+    return { success: false, error: error instanceof Error ? (error as Error).message : 'Error al procesar el turno' };
   }
 }
 
@@ -342,3 +344,147 @@ export async function noShowBooking(id: string) {
   }
 }
 
+
+
+export async function adminRescheduleBooking(
+  bookingId: string,
+  newProfessionalId: string,
+  localDate: string,
+  localTime: string
+) {
+  const session = await getAuthenticatedContext();
+  if (!session?.user?.businessId) return { success: false, error: 'No autorizado' };
+
+  if (session.user.role === 'STAFF') {
+    return { success: false, error: 'No tenés permisos para reprogramar turnos' };
+  }
+
+  const businessId = session.user.businessId;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Obtener el Booking por bookingId
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: { business: true, service: true, professional: true, customer: true }
+      });
+
+      if (!booking) throw new Error('Turno no encontrado');
+
+      // 2. Validar pertenencia
+      if (booking.businessId !== businessId) {
+        throw new Error('No autorizado para modificar este turno');
+      }
+
+      // 3. Validar estado PENDING o CONFIRMED
+      if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
+        throw new Error('Este turno ya no puede reprogramarse');
+      }
+
+      // 4. Obtener Business (ya incluido) para timezone
+      if (!booking.business.isActive) throw new Error('El negocio está inactivo');
+
+      // 5. Obtener Service (ya incluido)
+      if (!booking.service.isActive) throw new Error('El servicio está inactivo');
+
+      // 6. Obtener Professional destino
+      const newProfessional = await tx.professional.findUnique({
+        where: { id: newProfessionalId }
+      });
+      if (!newProfessional || newProfessional.businessId !== businessId || !newProfessional.isActive) {
+        throw new Error('Profesional destino inválido o inactivo');
+      }
+
+      // ORDEN DE LOCKS DETERMINISTA
+      // Si el profesional cambió, ordenamos lexicográficamente para evitar deadlocks
+      if (booking.professionalId !== newProfessionalId) {
+        const profs = [booking.professionalId, newProfessionalId].sort();
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${profs[0]}));`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${profs[1]}));`;
+      } else {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${newProfessionalId}));`;
+      }
+
+      // Calcular nueva fecha y hora UTC
+      const startAt = createBusinessDate(localDate, localTime, booking.business.timezone);
+      const endAt = calculateEndAt(startAt, booking.serviceDuration);
+      const now = new Date();
+
+      if (startAt < now) {
+        throw new Error('El horario no puede estar en el pasado');
+      }
+
+      const { dayOfWeek, minuteOfDay: startMinute } = getBusinessDayAndMinute(startAt, booking.business.timezone);
+      const { minuteOfDay: endMinute } = getBusinessDayAndMinute(endAt, booking.business.timezone);
+
+      if (endMinute <= startMinute) {
+        throw new Error('El turno no puede cruzar la medianoche');
+      }
+
+      // Validar BusinessHours
+      const businessHours = await tx.businessHour.findMany({
+        where: { businessId, dayOfWeek }
+      });
+
+      const isWithinHours = businessHours.some(h => startMinute >= h.startMinute && endMinute <= h.endMinute);
+      if (!isWithinHours) {
+        throw new Error('El horario seleccionado está fuera del horario de atención');
+      }
+
+      // Validar BlockedTime
+      const exactDate = new Date(`${localDate}T00:00:00Z`);
+      const blocks = await tx.blockedTime.findMany({
+        where: { businessId, date: exactDate }
+      });
+
+      const isBlocked = blocks.some(b => Math.max(startMinute, b.startMinute) < Math.min(endMinute, b.endMinute));
+      if (isBlocked) throw new Error('El horario está bloqueado excepcionalmente');
+
+      // Validar Overlap excluyendo el id actual
+      const overlaps = await tx.booking.findMany({
+        where: {
+          businessId,
+          professionalId: newProfessionalId,
+          status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+          id: { not: booking.id },
+          startAt: { lt: endAt },
+          endAt: { gt: startAt }
+        }
+      });
+
+      if (overlaps.length > 0) {
+        throw new Error('El profesional ya tiene un turno en ese horario');
+      }
+
+      // Update
+      const updatedBooking = await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          professionalId: newProfessionalId,
+          startAt,
+          endAt
+        }
+      });
+
+      return { success: true, updatedBooking, oldStartAt: booking.startAt, oldEndAt: booking.endAt, oldProfessionalName: booking.professional.name, newProfessionalName: newProfessional.name };
+    });
+
+    if (result.success) {
+      // Emails
+            // If we don't pass it, the email just doesn't include the management link. This is fine.
+
+      const emailCli = await sendBookingRescheduledEmail(bookingId, undefined, result.oldProfessionalName !== result.newProfessionalName ? result.oldProfessionalName : undefined).catch(() => null);
+      const emailAdm = await sendBookingRescheduledAdminEmail(bookingId, result.oldStartAt, result.oldEndAt, result.oldProfessionalName !== result.newProfessionalName ? result.oldProfessionalName : undefined).catch(() => null);
+
+      if (!emailCli?.success) console.warn('Email cliente fallo:', emailCli);
+      if (!emailAdm?.success) console.warn('Email admin fallo:', emailAdm);
+
+      revalidatePath('/dashboard/calendario');
+      revalidatePath('/dashboard/turnos');
+      return { success: true };
+    }
+  } catch (error: unknown) {
+    console.error('Error en adminRescheduleBooking:', error);
+    return { success: false, error: (error as Error).message || 'Error desconocido' };
+  }
+}
