@@ -95,7 +95,7 @@ export default function ClienteDetailClient({
                 )}
               </div>
               <div>
-                <span className="block text-gray-500 mb-1">Teléfono</span>
+                <span className="block text-gray-500 mb-1">TelÃ©fono</span>
                 {customer.phone ? (
                   <a href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">{customer.phone}</a>
                 ) : (
@@ -120,7 +120,7 @@ export default function ClienteDetailClient({
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          {/* Métricas */}
+          {/* MÃ©tricas */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 shadow-sm">
               <div className="text-sm text-gray-400 mb-1">Total Turnos</div>
@@ -140,13 +140,13 @@ export default function ClienteDetailClient({
             </div>
           </div>
 
-          {/* Próximos Turnos */}
+          {/* PrÃ³ximos Turnos */}
           <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-sm">
             <div className="p-6 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-white">Próximos Turnos</h3>
+              <h3 className="text-lg font-semibold text-white">PrÃ³ximos Turnos</h3>
             </div>
             {upcomingBookings.length === 0 ? (
-              <div className="p-6 text-center text-sm text-gray-500 italic">Sin Próximos turnos</div>
+              <div className="p-6 text-center text-sm text-gray-500 italic">Sin PrÃ³ximos turnos</div>
             ) : (
               <div className="divide-y divide-gray-700">
                 {upcomingBookings.map(booking => (
@@ -225,7 +225,7 @@ export default function ClienteDetailClient({
                   Anterior
                 </button>
                 <span className="text-sm text-gray-400">
-                  Página {currentPage} de {totalHistoryPages}
+                  PÃ¡gina {currentPage} de {totalHistoryPages}
                 </span>
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
