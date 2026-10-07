@@ -53,33 +53,39 @@ export default function OnboardingBanner({
           </p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-            {steps.map(step => (
-              <Link 
-                key={step.id} 
-                href={step.href}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
-                  step.isReady 
-                    ? 'bg-green-500/10 border-green-500/20 opacity-70 cursor-default' 
-                    : 'bg-[#1A1A1C] border-gray-700 hover:border-yellow-500/50 hover:bg-gray-800 cursor-pointer'
-                }`}
-                onClick={(e) => {
-                  if (step.isReady) e.preventDefault();
-                }}
-              >
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  step.isReady ? 'bg-green-500 text-black' : 'border-2 border-gray-600 text-transparent'
-                }`}>
-                  {step.isReady && (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-                <span className={`text-sm font-semibold ${step.isReady ? 'text-green-400' : 'text-gray-200'}`}>
-                  {step.label}
-                </span>
-              </Link>
-            ))}
+            {steps.map(step => {
+              if (step.isReady) {
+                return (
+                  <div 
+                    key={step.id} 
+                    className="flex items-center gap-3 p-3 rounded-xl border transition-colors bg-green-500/10 border-green-500/20 opacity-70 cursor-default"
+                  >
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-green-500 text-black">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="text-sm font-semibold text-green-400">
+                      {step.label}
+                    </span>
+                  </div>
+                );
+              }
+              
+              return (
+                <Link 
+                  key={step.id} 
+                  href={step.href}
+                  className="flex items-center gap-3 p-3 rounded-xl border transition-colors bg-[#1A1A1C] border-gray-700 hover:border-yellow-500/50 hover:bg-gray-800 cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 border-2 border-gray-600 text-transparent">
+                  </div>
+                  <span className="text-sm font-semibold text-gray-200">
+                    {step.label}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>
