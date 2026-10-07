@@ -121,7 +121,7 @@ export default function PublicBookingClient({
           <div className="border-t border-gray-200 pt-4">
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Qué</div>
             <div className="font-medium">{srv?.name} con {prof?.name}</div>
-            <div className="text-sm text-gray-500">{srv?.duration} min â€¢ ${srv?.price.toString()}</div>
+            <div className="text-sm text-gray-500">{srv?.duration} min · ${srv?.price.toString()}</div>
           </div>
           <div className="border-t border-gray-200 pt-4">
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Dónde</div>
