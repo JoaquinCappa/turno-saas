@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma skills sync || exit 0",
+    "postinstall": "prisma generate && npm run skills-sync",
+    "skills-sync": "prisma skills sync || exit 0",
     "test": "vitest run",
     "test:concurrency": "vitest run -c vitest.concurrency.config.ts",
     "test:watch": "vitest"
