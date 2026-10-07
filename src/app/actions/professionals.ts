@@ -39,6 +39,7 @@ export async function createProfessional(data: { name: string; email?: string; p
     });
 
     revalidatePath('/dashboard/profesionales');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error('Error creating professional:', error);
@@ -89,6 +90,7 @@ export async function updateProfessional(id: string, data: { name: string; email
     });
 
     revalidatePath('/dashboard/profesionales');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error('Error updating professional:', error);
@@ -123,6 +125,7 @@ export async function toggleProfessionalStatus(id: string, isActive: boolean) {
     });
 
     revalidatePath('/dashboard/profesionales');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error('Error toggling professional status:', error);

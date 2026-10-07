@@ -54,6 +54,7 @@ export async function createBusinessHour(data: { dayOfWeek: DayOfWeek; startMinu
     });
 
     revalidatePath('/dashboard/configuracion');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error('Error creating business hour:', error);
@@ -87,6 +88,7 @@ export async function deleteBusinessHour(id: string) {
     });
 
     revalidatePath('/dashboard/configuracion');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error('Error deleting business hour:', error);

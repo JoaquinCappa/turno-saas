@@ -38,6 +38,7 @@ export async function createService(data: { name: string; duration: number; pric
     });
 
     revalidatePath('/dashboard/servicios');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error('Error creating service:', error);
@@ -89,6 +90,7 @@ export async function updateService(id: string, data: { name: string; duration: 
     });
 
     revalidatePath('/dashboard/servicios');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error('Error updating service:', error);
@@ -123,6 +125,7 @@ export async function toggleServiceStatus(id: string, isActive: boolean) {
     });
 
     revalidatePath('/dashboard/servicios');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error('Error toggling service status:', error);

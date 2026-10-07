@@ -176,7 +176,7 @@ export async function createPublicBooking(data: {
     select: { id: true, timezone: true, isActive: true }
   });
 
-  if (!business || !business.isActive) return { success: false, error: 'Negocio invÃ¡lido o inactivo' };
+  if (!business || !business.isActive) return { success: false, error: 'Negocio inválido o inactivo' };
 
   if (!data.customerName || !data.customerEmail) {
     return { success: false, error: 'Nombre y email son obligatorios' };
@@ -251,7 +251,7 @@ export async function createPublicBooking(data: {
 
 export async function cancelPublicBooking(token: string) {
   if (!token || typeof token !== 'string') {
-    return { success: false, error: 'El enlace de gestiÃ³n no es vÃ¡lido.' };
+    return { success: false, error: 'El enlace de gestión no es válido.' };
   }
 
   const managementTokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -263,7 +263,7 @@ export async function cancelPublicBooking(token: string) {
     });
 
     if (!booking) {
-      return { success: false, error: 'El enlace de gestiÃ³n no es vÃ¡lido.' };
+      return { success: false, error: 'El enlace de gestión no es válido.' };
     }
 
     // Call the internal cancellation logic (which guarantees atomicity and sends email)
@@ -273,7 +273,7 @@ export async function cancelPublicBooking(token: string) {
       try {
         await sendBookingCancelledAdminEmail(booking.id);
       } catch (e) {
-        console.error('Error no bloqueante al despachar notificaciÃ³n administrativa de cancelaciÃ³n:', e);
+        console.error('Error no bloqueante al despachar notificación administrativa de cancelación:', e);
       }
       revalidatePath(`/mi-turno/${token}`);
     }
@@ -281,7 +281,7 @@ export async function cancelPublicBooking(token: string) {
     return result;
   } catch (error) {
     console.error('Error in cancelPublicBooking:', error);
-    return { success: false, error: 'Error al procesar la cancelaciÃ³n.' };
+    return { success: false, error: 'Error al procesar la cancelación.' };
   }
 }
 
@@ -308,7 +308,7 @@ import {
 
 export async function reschedulePublicBooking(token: string, localDate: string, localTime: string) {
   if (!token || typeof token !== 'string') {
-    return { success: false, error: 'El enlace de gestiÃ³n no es vÃ¡lido.' };
+    return { success: false, error: 'El enlace de gestión no es válido.' };
   }
 
   const managementTokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -320,14 +320,14 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
           include: { business: true, customer: true, service: true, professional: true }
         });
 
-        if (!booking) throw new Error('El enlace de gestin no es vǭlido.');
+        if (!booking) throw new Error('El enlace de gestión no es válido.');
         if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
           throw new Error('Este turno ya no puede reprogramarse.');
         }
 
-        if (!booking.business.isActive) throw new Error('Negocio invǭlido o inactivo.');
-        if (!booking.service.isActive) throw new Error('Servicio invǭlido o inactivo.');
-        if (!booking.professional.isActive) throw new Error('Profesional invǭlido o inactivo.');
+        if (!booking.business.isActive) throw new Error('Negocio inválido o inactivo.');
+        if (!booking.service.isActive) throw new Error('Servicio inválido o inactivo.');
+        if (!booking.professional.isActive) throw new Error('Profesional inválido o inactivo.');
 
         if (!booking.customer?.email) throw new Error('Cliente sin email.');
         const normalizedEmail = booking.customer.email.trim().toLowerCase();
@@ -355,7 +355,7 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
         });
 
         if (existingBooking) {
-          throw new Error('Ya tenǸs un turno para ese dǭa. Solo permitimos un turno por cliente por dǭa.');
+          throw new Error('Ya tenés un turno para ese día. Solo permitimos un turno por cliente por día.');
         }
 
         const { dayOfWeek, minuteOfDay: startMinute } = getBusinessDayAndMinute(startAt, booking.business.timezone);
@@ -392,7 +392,7 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
         });
 
         if (overlaps.length > 0) {
-          throw new Error('Este horario acaba de ser ocupado. Eleg otro.');
+          throw new Error('Este horario acaba de ser ocupado. Elegí otro.');
         }
 
         const updated = await tx.booking.updateMany({
@@ -417,20 +417,20 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
     try {
       await sendBookingRescheduledEmail(result.id, token);
     } catch (e) {
-      console.error('Error no bloqueante al despachar notificaciÃ³n de reprogramaciÃ³n:', e);
+      console.error('Error no bloqueante al despachar notificación de reprogramación:', e);
     }
 
     try {
       await sendBookingRescheduledAdminEmail(result.id, result.oldStartAt, result.oldEndAt);
     } catch (e) {
-      console.error('Error no bloqueante al despachar notificaciÃ³n administrativa de reprogramaciÃ³n:', e);
+      console.error('Error no bloqueante al despachar notificación administrativa de reprogramación:', e);
     }
 
     revalidatePath(`/mi-turno/${token}`);
     return { success: true };
   } catch (error) {
     console.error('Error in reschedulePublicBooking:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Error al procesar la reprogramaciÃ³n.' };
+    return { success: false, error: error instanceof Error ? error.message : 'Error al procesar la reprogramación.' };
   }
 }
 

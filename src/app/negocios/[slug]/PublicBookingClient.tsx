@@ -96,7 +96,7 @@ export default function PublicBookingClient({
         <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
         </div>
-        <h2 className="text-3xl font-extrabold mb-2">Â¡Reserva confirmada!</h2>
+        <h2 className="text-3xl font-extrabold mb-2">¡Reserva confirmada!</h2>
         <p className="text-gray-500 mb-8">Te esperamos, {customerName.split(' ')[0]}.</p>
 
         <div className="bg-gray-50 rounded-xl p-6 text-left space-y-4 mb-8">
@@ -181,7 +181,7 @@ export default function PublicBookingClient({
             <span className={`hidden sm:inline font-medium ${step >= s.num ? 'text-gray-900' : 'text-gray-400'}`}>
               {s.label}
             </span>
-            {idx < steps.length - 1 && <span className="text-gray-300 hidden sm:inline ml-2">â€º</span>}
+            {idx < steps.length - 1 && <span className="text-gray-300 hidden sm:inline ml-2">›</span>}
           </div>
         ))}
       </div>
@@ -349,10 +349,10 @@ export default function PublicBookingClient({
             <h4 className="text-red-900 font-bold mb-2">Ya tenés un turno para ese día.</h4>
             <div className="bg-white p-4 rounded-xl border border-red-100 mb-4 inline-block text-left shadow-sm">
               <div className="font-medium text-gray-900">
-                {new Date(existingBookingInfo.startAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} Â· {new Date(existingBookingInfo.startAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}â€“{new Date(existingBookingInfo.endAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                {new Date(existingBookingInfo.startAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} · {new Date(existingBookingInfo.startAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}–{new Date(existingBookingInfo.endAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
               </div>
               <div className="text-gray-600 text-sm mt-1">
-                {existingBookingInfo.serviceName} Â· {existingBookingInfo.professionalName}
+                {existingBookingInfo.serviceName} · {existingBookingInfo.professionalName}
               </div>
             </div>
             <p className="text-red-700 text-sm mb-6">Solo permitimos un turno por cliente por día.</p>
