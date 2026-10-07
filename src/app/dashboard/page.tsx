@@ -4,6 +4,7 @@ import DashboardHeader from './DashboardHeader';
 import WhatsAppAction from '@/components/dashboard/WhatsAppAction';
 import Link from 'next/link';
 import { getBusinessDayBounds, formatBusinessDate } from '@/lib/date-utils';
+import OnboardingBanner from './OnboardingBanner';
 
 export default async function DashboardResumenPage() {
   const session = await getAuthenticatedContext();
@@ -18,7 +19,7 @@ export default async function DashboardResumenPage() {
   // Get business for timezone
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { timezone: true, name: true }
+    select: { timezone: true, name: true, slug: true }
   });
 
   if (!business) {
@@ -36,7 +37,9 @@ export default async function DashboardResumenPage() {
     proximosCount,
     clientesCount,
     profesionalesCount,
-    proximosTurnos
+    proximosTurnos,
+    serviciosCount,
+    businessHoursData
   ] = await Promise.all([
     prisma.booking.count({
       where: {
@@ -69,8 +72,22 @@ export default async function DashboardResumenPage() {
       include: {
         customer: { select: { name: true, phone: true } },
       }
+    }),
+    prisma.service.count({
+      where: { businessId, isActive: true }
+    }),
+    prisma.businessHour.findFirst({
+      where: { businessId },
+      select: { id: true }
     })
   ]);
+
+  const isPublicPageReady = !!business.slug;
+  const isServicesReady = serviciosCount > 0;
+  const isProfessionalsReady = profesionalesCount > 0;
+  const isHoursReady = !!businessHoursData;
+
+  const isOnboardingComplete = isPublicPageReady && isServicesReady && isProfessionalsReady && isHoursReady;
 
   return (
     <>
@@ -83,6 +100,15 @@ export default async function DashboardResumenPage() {
             <h1 className="text-3xl font-bold text-white mb-2">Buenos días, {userName}</h1>
             <p className="text-gray-400">Acá tenés un resumen de tu negocio.</p>
           </div>
+
+          {!isOnboardingComplete && (
+            <OnboardingBanner 
+              isServicesReady={isServicesReady}
+              isProfessionalsReady={isProfessionalsReady}
+              isHoursReady={isHoursReady}
+              isPublicPageReady={isPublicPageReady}
+            />
+          )}
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             <MetricCard title="Turnos de hoy" value={turnosHoyCount.toString()} icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />} />
@@ -217,3 +243,4 @@ function QuickActionLink({ label, icon, href }: { label: string, icon: React.Rea
     </Link>
   );
 }
+
