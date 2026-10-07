@@ -307,13 +307,14 @@ describe('createPublicBooking - Integracion Mockeada', () => {
     expect('bookingId' in result).toBe(true);
   });
 
-  it('B. Rechaza si ya tiene un turno ese dia (limit_exceeded)', async () => {
+  it('B. Rechaza si ya tiene un turno ese dia (limit_exceeded) con estado PENDING/CONFIRMED/COMPLETED', async () => {
     mockTx.booking.findFirst.mockResolvedValue({
       id: 'old-1',
       startAt: new Date('2026-10-10T10:00:00Z'),
       endAt: new Date('2026-10-10T11:00:00Z'),
       service: { name: 'Srv' },
-      professional: { name: 'Prof' }
+      professional: { name: 'Prof' },
+      status: 'CONFIRMED'
     });
 
     const result = await createPublicBooking({
@@ -326,5 +327,46 @@ describe('createPublicBooking - Integracion Mockeada', () => {
     expect(result.success).toBe(false);
     expect('reason' in result && result.reason === 'limit_exceeded').toBe(true);
     expect(mockTx.booking.create).not.toHaveBeenCalled();
+  });
+
+  it('C. Un cliente con un turno NO_SHOW puede volver a reservar ese mismo día', async () => {
+    // Si findFirst devuelve null es porque el query filtra PENDING/CONFIRMED/COMPLETED y NO encuentra el NO_SHOW
+    mockTx.booking.findFirst.mockResolvedValue(null);
+
+    const result = await createPublicBooking({
+      slug: 'mi-negocio',
+      serviceId, professionalId,
+      localDate: baseDate, localTime: '15:00',
+      customerName: 'Juan', customerEmail: 'juan@test.com', customerPhone: '123'
+    });
+
+    expect(result.success).toBe(true);
+    expect('bookingId' in result).toBe(true);
+    expect(mockTx.booking.create).toHaveBeenCalled();
+
+    const dailyQuery = mockTx.booking.findFirst.mock.calls[0][0];
+    expect(dailyQuery.where.status.in).toEqual(['PENDING', 'CONFIRMED', 'COMPLETED']);
+    expect(dailyQuery.where.status.in).not.toContain('NO_SHOW');
+  });
+
+  it('D. Un cliente con un turno CANCELLED puede volver a reservar ese mismo día', async () => {
+    // Si findFirst devuelve null es porque el query filtra CANCELLED
+    mockTx.booking.findFirst.mockResolvedValue(null);
+
+    const result = await createPublicBooking({
+      slug: 'mi-negocio',
+      serviceId, professionalId,
+      localDate: baseDate, localTime: '16:00',
+      customerName: 'Juan', customerEmail: 'juan@test.com', customerPhone: '123'
+    });
+
+    expect(result.success).toBe(true);
+    expect('bookingId' in result).toBe(true);
+    expect(mockTx.booking.create).toHaveBeenCalled();
+
+    const dailyQuery = mockTx.booking.findFirst.mock.calls[0][0];
+    expect(dailyQuery.where.status.in).toEqual(['PENDING', 'CONFIRMED', 'COMPLETED']);
+    expect(dailyQuery.where.status.in).not.toContain('NO_SHOW');
+    expect(dailyQuery.where.status.in).not.toContain('CANCELLED');
   });
 });

@@ -93,7 +93,7 @@ export async function getAvailableTimes(
         businessId,
         customer: { email: normalizedEmail },
         startAt: { gte: startOfDayUTC, lte: endOfDayUTC },
-        status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW'] },
+        status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] },
         id: excludeBookingId ? { not: excludeBookingId } : undefined
       },
       include: {
@@ -200,7 +200,7 @@ export async function createPublicBooking(data: {
         businessId: business.id,
         customer: { email: normalizedEmail },
         startAt: { gte: startOfDayUTC, lte: endOfDayUTC },
-        status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW'] }
+        status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] }
       },
       include: {
         professional: { select: { name: true } },
@@ -349,7 +349,7 @@ export async function reschedulePublicBooking(token: string, localDate: string, 
             businessId: booking.businessId,
             customer: { email: normalizedEmail },
             startAt: { gte: startOfDayUTC, lte: endOfDayUTC },
-            status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW'] },
+            status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] },
             id: { not: booking.id }
           }
         });

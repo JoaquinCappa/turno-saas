@@ -46,6 +46,7 @@ export default function PublicBookingClient({
   const [customerPhone, setCustomerPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [existingBookingInfo, setExistingBookingInfo] = useState<{ startAt: string, endAt: string, serviceName: string, professionalName: string } | null>(null);
+  const [dayBlockedBy, setDayBlockedBy] = useState<{ startAt: string, endAt: string, serviceName: string, professionalName: string } | null>(null);
 
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [isLoadingTimes, setIsLoadingTimes] = useState(false);
@@ -71,17 +72,30 @@ export default function PublicBookingClient({
       }, 0);
       getAvailableTimes(business.id, serviceId, professionalId, localDate, undefined, customerEmail).then(res => {
         if (!active) return;
-        if ('hasBookingThatDay' in res && res.hasBookingThatDay) {
-          setExistingBookingInfo(res.existingBooking as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-          setStep(3);
+        // La autoridad es el backend: si reporta un turno bloqueante ese dia, lo mostramos en el selector
+        // de fecha (sin forzar volver al paso 3) para que el usuario pueda elegir otra fecha.
+        const blockingBooking = 'existingBooking' in res ? res.existingBooking : undefined;
+        if (res.hasBookingThatDay && blockingBooking) {
+          setDayBlockedBy({
+            startAt: new Date(blockingBooking.startAt).toISOString(),
+            endAt: new Date(blockingBooking.endAt).toISOString(),
+            serviceName: blockingBooking.serviceName,
+            professionalName: blockingBooking.professionalName
+          });
+          setAvailableTimes([]);
+          setIsLoadingTimes(false);
           return;
         }
+        setDayBlockedBy(null);
         setAvailableTimes(res.availableTimes || []);
         setIsLoadingTimes(false);
       });
     } else {
       setTimeout(() => {
-        if (active) setAvailableTimes([]);
+        if (active) {
+          setAvailableTimes([]);
+          setDayBlockedBy(null);
+        }
       }, 0);
     }
     return () => { active = false; };
@@ -301,6 +315,19 @@ export default function PublicBookingClient({
                 {isLoadingTimes ? (
                   <div className="py-12 flex justify-center">
                     <div className="w-8 h-8 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin"></div>
+                  </div>
+                ) : dayBlockedBy ? (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+                    <h4 className="text-red-900 font-bold mb-2">Ya tenés un turno para ese día.</h4>
+                    <div className="bg-white p-4 rounded-xl border border-red-100 mb-4 inline-block text-left shadow-sm">
+                      <div className="font-medium text-gray-900">
+                        {new Date(dayBlockedBy.startAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} · {new Date(dayBlockedBy.startAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}–{new Date(dayBlockedBy.endAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                      <div className="text-gray-600 text-sm mt-1">
+                        {dayBlockedBy.serviceName} · {dayBlockedBy.professionalName}
+                      </div>
+                    </div>
+                    <p className="text-red-700 text-sm">Solo permitimos un turno por cliente por día. Elegí otra fecha.</p>
                   </div>
                 ) : availableTimes.length === 0 ? (
                   <div className="bg-gray-50 border border-gray-100 rounded-2xl p-8 text-center">

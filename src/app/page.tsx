@@ -1,26 +1,11 @@
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
+import { getPublicListableBusinesses } from '@/lib/publicBusinesses';
 
 export const dynamic = 'force-dynamic'; // Prevent static generation with stale data
 
 export default async function Home() {
-  const businesses = await prisma.business.findMany({
-    where: { isActive: true },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      description: true,
-      logoUrl: true,
-      coverImageUrl: true,
-      services: {
-        where: { isActive: true },
-        select: { id: true, name: true, price: true, duration: true },
-        take: 3
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
+  const businesses = await getPublicListableBusinesses(prisma);
 
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans flex flex-col">

@@ -140,7 +140,7 @@ describe('reschedulePublicBooking', () => {
     }));
   });
 
-  it('F. Regla de email/dia: limit_exceeded y excluye el propio booking', async () => {
+  it('F. Regla de email/dia: limit_exceeded y excluye el propio booking (con turno PENDING/CONFIRMED/COMPLETED)', async () => {
     mockTx.booking.findFirst.mockResolvedValue({ id: 'booking-2' });
     
     const result = await reschedulePublicBooking('valid', baseDate, '11:00');
@@ -150,9 +150,23 @@ describe('reschedulePublicBooking', () => {
     expect(mockTx.booking.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         id: { not: 'booking-1' },
-        customer: { email: customerEmail }
+        customer: { email: customerEmail },
+        status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] }
       })
     }));
+  });
+
+  it('F2. Regla de email/dia: no bloquea si el turno existente es NO_SHOW', async () => {
+    // El backend filtra solo PENDING/CONFIRMED/COMPLETED: un NO_SHOW no aparece en el resultado (findFirst => null)
+    mockTx.booking.findFirst.mockResolvedValue(null);
+
+    const result = await reschedulePublicBooking('valid', baseDate, '11:00');
+    expect(result?.success).toBe(true);
+
+    const dailyQuery = mockTx.booking.findFirst.mock.calls[0][0];
+    expect(dailyQuery.where.status.in).toEqual(['PENDING', 'CONFIRMED', 'COMPLETED']);
+    expect(dailyQuery.where.status.in).not.toContain('NO_SHOW');
+    expect(dailyQuery.where.status.in).not.toContain('CANCELLED');
   });
 
   it('G. Concurrencia / Lock', async () => {
