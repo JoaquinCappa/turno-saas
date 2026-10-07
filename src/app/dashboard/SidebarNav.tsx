@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import LogoutButton from './LogoutButton';
+import PublicLinkShare from './PublicLinkShare';
 
-export default function SidebarNav({ businessName, userRole }: { businessName: string; userRole: string }) {
+export default function SidebarNav({ businessName, businessSlug, userRole }: { businessName: string; businessSlug: string; userRole: string }) {
   const pathname = usePathname();
 
   const navItems = [
@@ -64,6 +65,8 @@ export default function SidebarNav({ businessName, userRole }: { businessName: s
           </Link>
         ))}
       </nav>
+
+      <PublicLinkShare slug={businessSlug} />
 
       <div className="p-4 border-t border-gray-800 hidden md:block space-y-1">
         <Link href="/dashboard/configuracion" className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${pathname === '/dashboard/configuracion' ? 'bg-white text-black' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>

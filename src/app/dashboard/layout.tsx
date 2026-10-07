@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="min-h-screen bg-[#0A0A0B] text-gray-200 font-sans flex flex-col md:flex-row selection:bg-gray-700 selection:text-white">
       
       {/* SIDEBAR */}
-      <SidebarNav businessName={businessName} userRole={session.user.role} />
+      <SidebarNav businessName={businessName} businessSlug={business.slug} userRole={session.user.role} />
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
